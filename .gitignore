@@ -1,0 +1,30 @@
+# Build directories
+build/
+out/
+cmake-build-*/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.vcxproj.user
+
+# Compiled Object files
+*.o
+*.obj
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Dependencies
+external/glfw/
+external/imgui/
+
+# Compiled shaders
+*.spv
+
+# IDE
+.vscode/
+.idea/
