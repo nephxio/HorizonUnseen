@@ -5,9 +5,13 @@ InputSystem::InputSystem(GLFWwindow* window) : m_window(window) {}
 void InputSystem::update() {
     // Store previous frame's key states
     m_previousKeyState = m_currentKeyState;
-    
+
     // Update current key states for keys we care about
-    int keys[] = {GLFW_KEY_W, GLFW_KEY_A, GLFW_KEY_S, GLFW_KEY_D, GLFW_KEY_SPACE, GLFW_KEY_ESCAPE};
+    int keys[] = {
+        GLFW_KEY_W, GLFW_KEY_A, GLFW_KEY_S, GLFW_KEY_D,
+        GLFW_KEY_UP, GLFW_KEY_DOWN, GLFW_KEY_LEFT, GLFW_KEY_RIGHT,
+        GLFW_KEY_SPACE, GLFW_KEY_ESCAPE
+    };
     for (int key : keys) {
         m_currentKeyState[key] = glfwGetKey(m_window, key) == GLFW_PRESS;
     }

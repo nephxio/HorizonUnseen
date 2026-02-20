@@ -16,11 +16,15 @@ void Player::update(float deltaTime) {
 void Player::handleInput(const InputSystem& input, float deltaTime) {
     m_velocity = {0, 0};
 
-    // WASD movement
-    if (input.isKeyPressed(GLFW_KEY_W)) m_velocity.y -= m_speed;
-    if (input.isKeyPressed(GLFW_KEY_S)) m_velocity.y += m_speed;
-    if (input.isKeyPressed(GLFW_KEY_A)) m_velocity.x -= m_speed;
-    if (input.isKeyPressed(GLFW_KEY_D)) m_velocity.x += m_speed;
+    // WASD and Arrow key movement
+    if (input.isKeyPressed(GLFW_KEY_W) || input.isKeyPressed(GLFW_KEY_UP)) 
+        m_velocity.y -= m_speed;
+    if (input.isKeyPressed(GLFW_KEY_S) || input.isKeyPressed(GLFW_KEY_DOWN)) 
+        m_velocity.y += m_speed;
+    if (input.isKeyPressed(GLFW_KEY_A) || input.isKeyPressed(GLFW_KEY_LEFT)) 
+        m_velocity.x -= m_speed;
+    if (input.isKeyPressed(GLFW_KEY_D) || input.isKeyPressed(GLFW_KEY_RIGHT)) 
+        m_velocity.x += m_speed;
 
     // Normalize diagonal movement
     if (m_velocity.x != 0 && m_velocity.y != 0) {

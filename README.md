@@ -67,7 +67,7 @@ HorizonUnseen/
 
 ## Controls
 
-- **WASD** - Move player
+- **WASD / Arrow Keys** - Move player
 - **Space** - Shoot (TODO)
 - **ESC** - Exit game
 
