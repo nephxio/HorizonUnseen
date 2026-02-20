@@ -15,7 +15,9 @@ void Application::init() {
 
     m_inputSystem = std::make_unique<InputSystem>(m_renderer->getWindow());
     m_gameScene = std::make_unique<GameScene>();
-    
+
+    m_renderer->setGameScene(m_gameScene.get());
+
     m_running = true;
 }
 
