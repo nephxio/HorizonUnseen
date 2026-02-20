@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 #include <vector>
 #include <optional>
+#include <string>
 
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -41,6 +42,8 @@ public:
     VkRenderPass getRenderPass() const { return m_renderPass; }
     const std::vector<VkFramebuffer>& getFramebuffers() const { return m_framebuffers; }
     VkCommandPool getCommandPool() const { return m_commandPool; }
+    VkPipeline getPipeline() const { return m_pipeline; }
+    VkPipelineLayout getPipelineLayout() const { return m_pipelineLayout; }
 
 private:
     void createInstance();
@@ -50,8 +53,12 @@ private:
     void createSwapchain(GLFWwindow* window);
     void createImageViews();
     void createRenderPass();
+    void createGraphicsPipeline();
     void createFramebuffers();
     void createCommandPool();
+
+    VkShaderModule createShaderModule(const std::vector<char>& code);
+    std::vector<char> readFile(const std::string& filename);
 
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
@@ -76,4 +83,7 @@ private:
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
     std::vector<VkFramebuffer> m_framebuffers;
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
+
+    VkPipeline m_pipeline = VK_NULL_HANDLE;
+    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
 };

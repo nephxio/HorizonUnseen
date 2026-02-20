@@ -15,6 +15,7 @@ VulkanRenderer::~VulkanRenderer() {
 void VulkanRenderer::init() {
     initWindow();
     initVulkan();
+    createVertexBuffer();
     createCommandBuffers();
     createSyncObjects();
     initImGui();
@@ -84,6 +85,63 @@ void VulkanRenderer::createSyncObjects() {
     }
 }
 
+void VulkanRenderer::createVertexBuffer() {
+    // Triangle vertices: position (x, y) + color (r, g, b)
+    // Triangle pointing right (like a spaceship)
+    std::vector<float> vertices = {
+        // Position      // Color
+        -20.0f,  20.0f,  1.0f, 0.0f, 0.0f,  // Top-left (red)
+        -20.0f, -20.0f,  0.0f, 1.0f, 0.0f,  // Bottom-left (green)
+         20.0f,   0.0f,  0.0f, 0.0f, 1.0f   // Right point (blue)
+    };
+
+    VkDeviceSize bufferSize = sizeof(float) * vertices.size();
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = bufferSize;
+    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(m_context->getDevice(), &bufferInfo, nullptr, &m_vertexBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create vertex buffer");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(m_context->getDevice(), m_vertexBuffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+
+    // Find memory type
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(m_context->getPhysicalDevice(), &memProperties);
+
+    uint32_t memoryTypeIndex = 0;
+    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+        if ((memRequirements.memoryTypeBits & (1 << i)) &&
+            (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            memoryTypeIndex = i;
+            break;
+        }
+    }
+    allocInfo.memoryTypeIndex = memoryTypeIndex;
+
+    if (vkAllocateMemory(m_context->getDevice(), &allocInfo, nullptr, &m_vertexBufferMemory) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate vertex buffer memory");
+    }
+
+    vkBindBufferMemory(m_context->getDevice(), m_vertexBuffer, m_vertexBufferMemory, 0);
+
+    // Copy vertex data
+    void* data;
+    vkMapMemory(m_context->getDevice(), m_vertexBufferMemory, 0, bufferSize, 0, &data);
+    memcpy(data, vertices.data(), (size_t)bufferSize);
+    vkUnmapMemory(m_context->getDevice(), m_vertexBufferMemory);
+}
+
 void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -105,7 +163,32 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    // TODO: Render game objects here
+    // Bind the graphics pipeline
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_context->getPipeline());
+
+    // Bind vertex buffer
+    VkBuffer vertexBuffers[] = {m_vertexBuffer};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
+    // Set push constants for player position
+    if (m_gameScene) {
+        struct PushConstants {
+            float posX, posY;
+            float scaleX, scaleY;
+        } pushConstants;
+
+        pushConstants.posX = m_gameScene->getPlayer().getPosition().x;
+        pushConstants.posY = m_gameScene->getPlayer().getPosition().y;
+        pushConstants.scaleX = 1.0f;
+        pushConstants.scaleY = 1.0f;
+
+        vkCmdPushConstants(commandBuffer, m_context->getPipelineLayout(), 
+                          VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
+    }
+
+    // Draw triangle (3 vertices)
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -133,8 +216,8 @@ void VulkanRenderer::beginFrame() {
 }
 
 void VulkanRenderer::renderScene(const GameScene& scene) {
-    // TODO: Render game entities using Vulkan
-    // For now, just clear the screen
+    // Scene rendering is handled in recordCommandBuffer
+    // We pass the player position via push constants
 }
 
 void VulkanRenderer::renderUI() {
@@ -194,14 +277,27 @@ void VulkanRenderer::waitIdle() {
 }
 
 void VulkanRenderer::cleanup() {
+    if (m_isCleanedUp) {
+        return;
+    }
+
     if (m_context) {
         m_context->waitIdle();
     }
 
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vkDestroySemaphore(m_context->getDevice(), m_renderFinishedSemaphores[i], nullptr);
-        vkDestroySemaphore(m_context->getDevice(), m_imageAvailableSemaphores[i], nullptr);
-        vkDestroyFence(m_context->getDevice(), m_inFlightFences[i], nullptr);
+    if (m_context && m_context->getDevice() != VK_NULL_HANDLE) {
+        if (m_vertexBuffer != VK_NULL_HANDLE) {
+            vkDestroyBuffer(m_context->getDevice(), m_vertexBuffer, nullptr);
+        }
+        if (m_vertexBufferMemory != VK_NULL_HANDLE) {
+            vkFreeMemory(m_context->getDevice(), m_vertexBufferMemory, nullptr);
+        }
+
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            vkDestroySemaphore(m_context->getDevice(), m_renderFinishedSemaphores[i], nullptr);
+            vkDestroySemaphore(m_context->getDevice(), m_imageAvailableSemaphores[i], nullptr);
+            vkDestroyFence(m_context->getDevice(), m_inFlightFences[i], nullptr);
+        }
     }
 
     if (m_context) {
@@ -216,4 +312,6 @@ void VulkanRenderer::cleanup() {
         glfwDestroyWindow(m_window);
         glfwTerminate();
     }
+
+    m_isCleanedUp = true;
 }
