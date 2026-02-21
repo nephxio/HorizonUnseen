@@ -22,6 +22,7 @@ set(SOURCES
     src/Renderer/VulkanContext.cpp
     src/Game/GameScene.cpp
     src/Game/Player.cpp
+    src/Game/Enemy.cpp
     src/Game/Entity.cpp
     src/Systems/InputSystem.cpp
 )
@@ -32,6 +33,7 @@ set(HEADERS
     src/Renderer/VulkanContext.h
     src/Game/GameScene.h
     src/Game/Player.h
+    src/Game/Enemy.h
     src/Game/Entity.h
     src/Systems/InputSystem.h
 )

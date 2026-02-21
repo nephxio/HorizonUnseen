@@ -16,6 +16,7 @@ void VulkanRenderer::init() {
     initWindow();
     initVulkan();
     createVertexBuffer();
+    createEnemyVertexBuffer();
     createCommandBuffers();
     createSyncObjects();
     initImGui();
@@ -142,6 +143,68 @@ void VulkanRenderer::createVertexBuffer() {
     vkUnmapMemory(m_context->getDevice(), m_vertexBufferMemory);
 }
 
+void VulkanRenderer::createEnemyVertexBuffer() {
+    // Square vertices: position (x, y) + color (r, g, b)
+    // Two triangles forming a square centered at origin
+    std::vector<float> vertices = {
+        // First triangle
+        -15.0f, -15.0f,  1.0f, 0.0f, 0.0f,  // Bottom-left (red)
+         15.0f, -15.0f,  1.0f, 0.0f, 0.0f,  // Bottom-right (red)
+         15.0f,  15.0f,  1.0f, 0.0f, 0.0f,  // Top-right (red)
+
+        // Second triangle
+         15.0f,  15.0f,  1.0f, 0.0f, 0.0f,  // Top-right (red)
+        -15.0f,  15.0f,  1.0f, 0.0f, 0.0f,  // Top-left (red)
+        -15.0f, -15.0f,  1.0f, 0.0f, 0.0f   // Bottom-left (red)
+    };
+
+    VkDeviceSize bufferSize = sizeof(float) * vertices.size();
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = bufferSize;
+    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(m_context->getDevice(), &bufferInfo, nullptr, &m_enemyVertexBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create enemy vertex buffer");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(m_context->getDevice(), m_enemyVertexBuffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+
+    // Find memory type
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(m_context->getPhysicalDevice(), &memProperties);
+
+    uint32_t memoryTypeIndex = 0;
+    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+        if ((memRequirements.memoryTypeBits & (1 << i)) &&
+            (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            memoryTypeIndex = i;
+            break;
+        }
+    }
+    allocInfo.memoryTypeIndex = memoryTypeIndex;
+
+    if (vkAllocateMemory(m_context->getDevice(), &allocInfo, nullptr, &m_enemyVertexBufferMemory) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate enemy vertex buffer memory");
+    }
+
+    vkBindBufferMemory(m_context->getDevice(), m_enemyVertexBuffer, m_enemyVertexBufferMemory, 0);
+
+    // Copy vertex data
+    void* data;
+    vkMapMemory(m_context->getDevice(), m_enemyVertexBufferMemory, 0, bufferSize, 0, &data);
+    memcpy(data, vertices.data(), (size_t)bufferSize);
+    vkUnmapMemory(m_context->getDevice(), m_enemyVertexBufferMemory);
+}
+
 void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -166,17 +229,16 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     // Bind the graphics pipeline
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_context->getPipeline());
 
-    // Bind vertex buffer
-    VkBuffer vertexBuffers[] = {m_vertexBuffer};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    struct PushConstants {
+        float posX, posY;
+        float scaleX, scaleY;
+    } pushConstants;
 
-    // Set push constants for player position
     if (m_gameScene) {
-        struct PushConstants {
-            float posX, posY;
-            float scaleX, scaleY;
-        } pushConstants;
+        // Draw player (triangle)
+        VkBuffer vertexBuffers[] = {m_vertexBuffer};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
         pushConstants.posX = m_gameScene->getPlayer().getPosition().x;
         pushConstants.posY = m_gameScene->getPlayer().getPosition().y;
@@ -185,10 +247,25 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
 
         vkCmdPushConstants(commandBuffer, m_context->getPipelineLayout(), 
                           VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
-    }
 
-    // Draw triangle (3 vertices)
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+        // Draw enemies (squares)
+        VkBuffer enemyVertexBuffers[] = {m_enemyVertexBuffer};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, enemyVertexBuffers, offsets);
+
+        for (const auto& enemy : m_gameScene->getEnemies()) {
+            pushConstants.posX = enemy->getPosition().x;
+            pushConstants.posY = enemy->getPosition().y;
+            pushConstants.scaleX = 1.0f;
+            pushConstants.scaleY = 1.0f;
+
+            vkCmdPushConstants(commandBuffer, m_context->getPipelineLayout(), 
+                              VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
+
+            vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+        }
+    }
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -291,6 +368,13 @@ void VulkanRenderer::cleanup() {
         }
         if (m_vertexBufferMemory != VK_NULL_HANDLE) {
             vkFreeMemory(m_context->getDevice(), m_vertexBufferMemory, nullptr);
+        }
+
+        if (m_enemyVertexBuffer != VK_NULL_HANDLE) {
+            vkDestroyBuffer(m_context->getDevice(), m_enemyVertexBuffer, nullptr);
+        }
+        if (m_enemyVertexBufferMemory != VK_NULL_HANDLE) {
+            vkFreeMemory(m_context->getDevice(), m_enemyVertexBufferMemory, nullptr);
         }
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
