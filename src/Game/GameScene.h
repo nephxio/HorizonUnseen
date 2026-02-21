@@ -2,6 +2,7 @@
 
 #include "Player.h"
 #include "Enemy.h"
+#include "Spawner.h"
 #include <memory>
 #include <vector>
 
@@ -17,15 +18,15 @@ public:
     const std::vector<std::unique_ptr<Enemy>>& getEnemies() const { return m_enemies; }
 
 private:
-    void spawnEnemy();
+    void initializeSpawners();
+    void updateSpawners(float deltaTime);
     void updateEnemies(float deltaTime);
     void removeOffScreenEnemies();
+    void onEnemySpawned(std::unique_ptr<Enemy> enemy);
 
     Player m_player;
     std::vector<std::unique_ptr<Enemy>> m_enemies;
-
-    float m_enemySpawnTimer = 0.0f;
-    float m_enemySpawnInterval = 2.0f;
+    std::vector<std::unique_ptr<Spawner>> m_spawners;
 
     // TODO: Add these systems:
     // std::vector<std::unique_ptr<Bullet>> m_bullets;
