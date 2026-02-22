@@ -1,10 +1,12 @@
 #include "VulkanRenderer.h"
 #include "VulkanContext.h"
 #include "Game/GameScene.h"
+#include "Debug/DebugConsole.h"
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 #include <stdexcept>
+#include <iostream>
 
 VulkanRenderer::VulkanRenderer() : m_window(nullptr) {}
 
@@ -13,13 +15,21 @@ VulkanRenderer::~VulkanRenderer() {
 }
 
 void VulkanRenderer::init() {
+    std::cout << " - initWindow()" << std::endl;
     initWindow();
+    std::cout << " - initVulkan()" << std::endl;
     initVulkan();
+    std::cout << " - createVertexBuffer()" << std::endl;
     createVertexBuffer();
+    std::cout << " - createEnemyVertexBuffer()" << std::endl;
     createEnemyVertexBuffer();
+    std::cout << " - createCommandBuffers()" << std::endl;
     createCommandBuffers();
+    std::cout << " - createSyncObjects()" << std::endl;
     createSyncObjects();
+    std::cout << " - initImGui()" << std::endl;
     initImGui();
+    std::cout << " - Renderer init complete!" << std::endl;
 }
 
 void VulkanRenderer::initWindow() {
@@ -46,9 +56,54 @@ void VulkanRenderer::initImGui() {
 
     ImGui::StyleColorsDark();
 
-    // TODO: Initialize ImGui Vulkan backend with proper descriptors
-    // ImGui_ImplGlfw_InitForVulkan(m_window, true);
-    // ImGui_ImplVulkan_Init(...);
+    ImGui_ImplGlfw_InitForVulkan(m_window, true);
+
+    // Create descriptor pool for ImGui
+    VkDescriptorPoolSize poolSizes[] = {
+        { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+    };
+
+    VkDescriptorPoolCreateInfo poolInfo = {};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    poolInfo.maxSets = 1000;
+    poolInfo.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]);
+    poolInfo.pPoolSizes = poolSizes;
+
+    if (vkCreateDescriptorPool(m_context->getDevice(), &poolInfo, nullptr, &m_imguiDescriptorPool) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create ImGui descriptor pool");
+    }
+
+    ImGui_ImplVulkan_InitInfo initInfo = {};
+    initInfo.ApiVersion = VK_API_VERSION_1_2;
+    initInfo.Instance = m_context->getInstance();
+    initInfo.PhysicalDevice = m_context->getPhysicalDevice();
+    initInfo.Device = m_context->getDevice();
+    initInfo.QueueFamily = 0;
+    initInfo.Queue = m_context->getGraphicsQueue();
+    initInfo.PipelineCache = VK_NULL_HANDLE;
+    initInfo.DescriptorPool = m_imguiDescriptorPool;
+    initInfo.MinImageCount = MAX_FRAMES_IN_FLIGHT;
+    initInfo.ImageCount = MAX_FRAMES_IN_FLIGHT;
+    initInfo.Allocator = nullptr;
+    initInfo.CheckVkResultFn = nullptr;
+
+    // Set pipeline info for the main viewport
+    initInfo.PipelineInfoMain.RenderPass = m_context->getRenderPass();
+    initInfo.PipelineInfoMain.Subpass = 0;
+    initInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+    ImGui_ImplVulkan_Init(&initInfo);
 }
 
 void VulkanRenderer::createCommandBuffers() {
@@ -267,6 +322,12 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
         }
     }
 
+    // Render ImGui only if there's draw data
+    ImDrawData* drawData = ImGui::GetDrawData();
+    if (drawData && drawData->TotalVtxCount > 0) {
+        ImGui_ImplVulkan_RenderDrawData(drawData, commandBuffer);
+    }
+
     vkCmdEndRenderPass(commandBuffer);
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -298,12 +359,14 @@ void VulkanRenderer::renderScene(const GameScene& scene) {
 }
 
 void VulkanRenderer::renderUI() {
-    // TODO: Render ImGui
-    // ImGui::Begin("Debug");
-    // ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-    // ImGui::End();
-    // ImGui::Render();
-    // ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // Render debug console
+    DebugConsole::getInstance().render();
+
+    ImGui::Render();
 }
 
 void VulkanRenderer::endFrame() {
@@ -377,6 +440,10 @@ void VulkanRenderer::cleanup() {
             vkFreeMemory(m_context->getDevice(), m_enemyVertexBufferMemory, nullptr);
         }
 
+        if (m_imguiDescriptorPool != VK_NULL_HANDLE) {
+            vkDestroyDescriptorPool(m_context->getDevice(), m_imguiDescriptorPool, nullptr);
+        }
+
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroySemaphore(m_context->getDevice(), m_renderFinishedSemaphores[i], nullptr);
             vkDestroySemaphore(m_context->getDevice(), m_imageAvailableSemaphores[i], nullptr);
@@ -388,9 +455,9 @@ void VulkanRenderer::cleanup() {
         m_context->cleanup();
     }
 
-    // ImGui_ImplVulkan_Shutdown();
-    // ImGui_ImplGlfw_Shutdown();
-    // ImGui::DestroyContext();
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
 
     if (m_window) {
         glfwDestroyWindow(m_window);

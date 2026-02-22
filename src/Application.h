@@ -22,6 +22,7 @@ private:
     std::unique_ptr<VulkanRenderer> m_renderer;
     std::unique_ptr<GameScene> m_gameScene;
     std::unique_ptr<InputSystem> m_inputSystem;
-    
+
     bool m_running;
+    bool m_lastTildeState = false;
 };

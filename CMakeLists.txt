@@ -26,6 +26,7 @@ set(SOURCES
     src/Game/Spawner.cpp
     src/Game/Entity.cpp
     src/Systems/InputSystem.cpp
+    src/Debug/DebugConsole.cpp
 )
 
 set(HEADERS
@@ -38,6 +39,8 @@ set(HEADERS
     src/Game/Spawner.h
     src/Game/Entity.h
     src/Systems/InputSystem.h
+    src/Config/GameConfig.h
+    src/Debug/DebugConsole.h
 )
 
 # Create executable

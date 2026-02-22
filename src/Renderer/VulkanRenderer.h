@@ -53,6 +53,8 @@ private:
     VkBuffer m_enemyVertexBuffer = VK_NULL_HANDLE;
     VkDeviceMemory m_enemyVertexBufferMemory = VK_NULL_HANDLE;
 
+    VkDescriptorPool m_imguiDescriptorPool = VK_NULL_HANDLE;
+
     uint32_t m_currentFrame = 0;
     uint32_t m_imageIndex = 0;
     bool m_isCleanedUp = false;

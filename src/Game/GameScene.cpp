@@ -1,5 +1,6 @@
 #include "GameScene.h"
 #include "Systems/InputSystem.h"
+#include "Config/GameConfig.h"
 #include <algorithm>
 
 GameScene::GameScene() : m_player() {

@@ -10,7 +10,7 @@ enum class EnemyState {
 class Enemy : public Entity {
 public:
     Enemy(float x, float y);
-    
+
     void update(float deltaTime) override;
 
     bool isOffScreen() const;
@@ -18,8 +18,5 @@ public:
 
 private:
     EnemyState m_state;
-    float m_horizontalSpeed = 150.0f;
-    float m_diveSpeed = 300.0f;
     float m_diveThreshold;
-    float m_diveAngle = 30.0f;
 };
