@@ -1,5 +1,6 @@
 #include "DebugConsole.h"
 #include "Config/GameConfig.h"
+#include "Game/GameScene.h"
 #include <imgui.h>
 #include <sstream>
 #include <algorithm>
@@ -31,6 +32,9 @@ void DebugConsole::processCommand(const std::string& command) {
         }
         else if (arg == "spawner" || arg == "spawners") {
             m_currentWindow = DebugWindow::SpawnerSettings;
+        }
+        else if (arg == "gamestate" || arg == "state") {
+            m_currentWindow = DebugWindow::GameState;
         }
         else if (arg == "close" || arg == "hide") {
             m_currentWindow = DebugWindow::None;
@@ -102,7 +106,7 @@ void DebugConsole::renderMainConsole() {
 }
 
 void DebugConsole::renderPlayerStatsWindow() {
-    ImGui::SetNextWindowSize(ImVec2(400, 250), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImVec2(520, 10), ImGuiCond_FirstUseEver);
 
     bool open = true;
@@ -129,6 +133,9 @@ void DebugConsole::renderPlayerStatsWindow() {
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Vertical movement speed");
         }
+
+        ImGui::Separator();
+        ImGui::Text("Note: Health changes apply to newly spawned player");
 
         ImGui::Separator();
 
@@ -226,4 +233,78 @@ void DebugConsole::renderSpawnerSettingsWindow() {
     if (!open) {
         m_currentWindow = DebugWindow::None;
     }
+}
+
+void DebugConsole::renderGameStateWindow() {
+    ImGui::SetNextWindowSize(ImVec2(300, 150), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(520, 10), ImGuiCond_FirstUseEver);
+
+    bool open = true;
+    if (ImGui::Begin("Game State", &open)) {
+        ImGui::Text("Runtime Information");
+        ImGui::Separator();
+
+        ImGui::Text("This window shows live game data");
+        ImGui::Text("Access via renderHUD() call");
+
+        if (ImGui::Button("Close")) {
+            open = false;
+        }
+    }
+    ImGui::End();
+
+    if (!open) {
+        m_currentWindow = DebugWindow::None;
+    }
+}
+
+void DebugConsole::renderHUD(const GameScene* scene) {
+    if (!scene) return;
+
+    // Always-visible HUD (not part of debug console)
+    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.5f);
+
+    if (ImGui::Begin("HUD", nullptr, 
+        ImGuiWindowFlags_NoTitleBar | 
+        ImGuiWindowFlags_NoResize | 
+        ImGuiWindowFlags_AlwaysAutoResize | 
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings)) {
+
+        const auto& player = scene->getPlayer();
+
+        // Health bar
+        ImGui::Text("Health: %.0f / %.0f", player.getHealth(), player.getMaxHealth());
+
+        float healthPercent = player.getHealth() / player.getMaxHealth();
+        ImVec4 healthColor = healthPercent > 0.5f ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f) : 
+                             healthPercent > 0.25f ? ImVec4(1.0f, 1.0f, 0.0f, 1.0f) : 
+                             ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, healthColor);
+        ImGui::ProgressBar(healthPercent, ImVec2(200, 20), "");
+        ImGui::PopStyleColor();
+
+        // Enemy count
+        ImGui::Text("Enemies: %zu", scene->getEnemies().size());
+
+        // Collision count
+        ImGui::Text("Collisions: %d", scene->getCollisionCount());
+
+        // Player position
+        ImGui::Text("Player: (%.0f, %.0f)", player.getPosition().x, player.getPosition().y);
+
+        // Show first enemy position if exists
+        if (!scene->getEnemies().empty()) {
+            const auto& enemy = scene->getEnemies().front();
+            ImGui::Text("Enemy: (%.0f, %.0f)", enemy->getPosition().x, enemy->getPosition().y);
+        }
+
+        // Player status
+        if (!player.isAlive()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "GAME OVER");
+        }
+    }
+    ImGui::End();
 }

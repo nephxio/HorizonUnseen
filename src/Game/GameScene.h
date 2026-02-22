@@ -17,16 +17,24 @@ public:
     const Player& getPlayer() const { return m_player; }
     const std::vector<std::unique_ptr<Enemy>>& getEnemies() const { return m_enemies; }
 
+    int getCollisionCount() const { return m_collisionCount; }
+
 private:
     void initializeSpawners();
     void updateSpawners(float deltaTime);
     void updateEnemies(float deltaTime);
     void removeOffScreenEnemies();
+    void removeDeadEnemies();
+    void checkCollisions();
     void onEnemySpawned(std::unique_ptr<Enemy> enemy);
 
     Player m_player;
     std::vector<std::unique_ptr<Enemy>> m_enemies;
     std::vector<std::unique_ptr<Spawner>> m_spawners;
+
+    int m_collisionCount = 0;
+    float m_lastCollisionTime = 0.0f;
+    float m_collisionCooldown = 0.5f;  // Half second between collisions
 
     // TODO: Add these systems:
     // std::vector<std::unique_ptr<Bullet>> m_bullets;

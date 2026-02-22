@@ -26,6 +26,7 @@ set(SOURCES
     src/Game/Spawner.cpp
     src/Game/Entity.cpp
     src/Systems/InputSystem.cpp
+    src/Systems/CollisionSystem.cpp
     src/Debug/DebugConsole.cpp
 )
 
@@ -39,6 +40,7 @@ set(HEADERS
     src/Game/Spawner.h
     src/Game/Entity.h
     src/Systems/InputSystem.h
+    src/Systems/CollisionSystem.h
     src/Config/GameConfig.h
     src/Debug/DebugConsole.h
 )

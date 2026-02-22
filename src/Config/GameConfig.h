@@ -14,6 +14,7 @@ public:
 
     // Enemy Stats
     float enemyHitPoints = 10.0f;
+    float enemyDamage = 50.0f;  // Increased from 20 to make collisions more obvious
     float enemyHorizontalSpeed = 150.0f;
     float enemyDiveSpeed = 300.0f;
     float enemyDiveAngle = 30.0f;

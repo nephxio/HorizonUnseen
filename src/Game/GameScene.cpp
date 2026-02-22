@@ -2,12 +2,16 @@
 #include "Systems/InputSystem.h"
 #include "Config/GameConfig.h"
 #include <algorithm>
+#include <iostream>
+#include <fstream>
 
 GameScene::GameScene() : m_player() {
     initializeSpawners();
 }
 
 void GameScene::update(float deltaTime, const InputSystem& input) {
+    m_lastCollisionTime += deltaTime;
+
     // Update player
     m_player.handleInput(input, deltaTime);
     m_player.update(deltaTime);
@@ -18,11 +22,16 @@ void GameScene::update(float deltaTime, const InputSystem& input) {
     // Update enemies
     updateEnemies(deltaTime);
 
+    // Check collisions
+    checkCollisions();
+
+    // Remove dead enemies
+    removeDeadEnemies();
+
     // Remove off-screen enemies
     removeOffScreenEnemies();
 
     // TODO: Update bullets
-    // TODO: Handle collisions
     // TODO: Update particles
     // TODO: Handle background scrolling
 }
@@ -69,6 +78,45 @@ void GameScene::removeOffScreenEnemies() {
             }),
         m_enemies.end()
     );
+}
+
+void GameScene::removeDeadEnemies() {
+    m_enemies.erase(
+        std::remove_if(m_enemies.begin(), m_enemies.end(),
+            [](const std::unique_ptr<Enemy>& enemy) {
+                return !enemy->isAlive();
+            }),
+        m_enemies.end()
+    );
+}
+
+void GameScene::checkCollisions() {
+    if (!m_player.isAlive()) return;
+    if (m_enemies.empty()) return;
+
+    // Check player vs enemies
+    auto playerBox = m_player.getCollisionBox();
+
+    for (size_t i = 0; i < m_enemies.size(); ++i) {
+        auto& enemy = m_enemies[i];
+        if (enemy->isAlive()) {
+            auto enemyBox = enemy->getCollisionBox();
+
+            if (CollisionSystem::checkCollision(playerBox, enemyBox)) {
+                // Only process collision if cooldown has elapsed
+                if (m_lastCollisionTime >= m_collisionCooldown) {
+                    m_collisionCount++;
+                    m_lastCollisionTime = 0.0f;  // Reset cooldown
+
+                    m_player.onCollision(enemy.get());
+                    enemy->onCollision(&m_player);
+                }
+
+                // Exit after first collision to prevent multiple collisions per frame
+                return;
+            }
+        }
+    }
 }
 
 void GameScene::onEnemySpawned(std::unique_ptr<Enemy> enemy) {
