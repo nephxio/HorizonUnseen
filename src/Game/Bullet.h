@@ -3,25 +3,17 @@
 #include "Entity.h"
 #include "Systems/CollisionSystem.h"
 
-class InputSystem;
-
-class Player : public Entity, public ICollidable {
+class Bullet : public Entity, public ICollidable {
 public:
-    Player();
-
+    Bullet(float x, float y, float velocityX, float velocityY, float damage);
+    
     void update(float deltaTime) override;
-    void handleInput(const InputSystem& input, float deltaTime);
 
-    bool canShoot() const { return m_shootCooldown <= 0.0f; }
-    void shoot();
-    float getShootCooldown() const { return m_shootCooldown; }
-
+    bool isOffScreen() const;
+    
     // ICollidable interface
     CollisionBox getCollisionBox() const override;
     void onCollision(ICollidable* other) override;
     float getDamage() const override { return Entity::getDamage(); }
     bool isAlive() const override { return Entity::isAlive(); }
-
-private:
-    float m_shootCooldown = 0.0f;
 };

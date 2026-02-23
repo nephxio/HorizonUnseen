@@ -16,11 +16,24 @@ void GameScene::update(float deltaTime, const InputSystem& input) {
     m_player.handleInput(input, deltaTime);
     m_player.update(deltaTime);
 
+    // Handle shooting - check if player can shoot and space is pressed
+    if (input.isKeyPressed(GLFW_KEY_SPACE) && m_player.canShoot()) {
+        auto& config = GameConfig::getInstance();
+        Vector2 playerPos = m_player.getPosition();
+        spawnBullet(playerPos.x + 25.0f, playerPos.y, 
+                    config.playerBulletSpeed, 0.0f, 
+                    config.playerBulletDamage);
+        m_player.shoot();
+    }
+
     // Update spawners
     updateSpawners(deltaTime);
 
     // Update enemies
     updateEnemies(deltaTime);
+
+    // Update bullets
+    updateBullets(deltaTime);
 
     // Check collisions
     checkCollisions();
@@ -31,7 +44,9 @@ void GameScene::update(float deltaTime, const InputSystem& input) {
     // Remove off-screen enemies
     removeOffScreenEnemies();
 
-    // TODO: Update bullets
+    // Remove off-screen bullets
+    removeOffScreenBullets();
+
     // TODO: Update particles
     // TODO: Handle background scrolling
 }
@@ -92,28 +107,48 @@ void GameScene::removeDeadEnemies() {
 
 void GameScene::checkCollisions() {
     if (!m_player.isAlive()) return;
-    if (m_enemies.empty()) return;
 
     // Check player vs enemies
-    auto playerBox = m_player.getCollisionBox();
+    if (!m_enemies.empty()) {
+        auto playerBox = m_player.getCollisionBox();
 
-    for (size_t i = 0; i < m_enemies.size(); ++i) {
-        auto& enemy = m_enemies[i];
-        if (enemy->isAlive()) {
-            auto enemyBox = enemy->getCollisionBox();
+        for (size_t i = 0; i < m_enemies.size(); ++i) {
+            auto& enemy = m_enemies[i];
+            if (enemy->isAlive()) {
+                auto enemyBox = enemy->getCollisionBox();
 
-            if (CollisionSystem::checkCollision(playerBox, enemyBox)) {
-                // Only process collision if cooldown has elapsed
-                if (m_lastCollisionTime >= m_collisionCooldown) {
-                    m_collisionCount++;
-                    m_lastCollisionTime = 0.0f;  // Reset cooldown
+                if (CollisionSystem::checkCollision(playerBox, enemyBox)) {
+                    // Only process collision if cooldown has elapsed
+                    if (m_lastCollisionTime >= m_collisionCooldown) {
+                        m_collisionCount++;
+                        m_lastCollisionTime = 0.0f;  // Reset cooldown
 
-                    m_player.onCollision(enemy.get());
-                    enemy->onCollision(&m_player);
+                        m_player.onCollision(enemy.get());
+                        enemy->onCollision(&m_player);
+                    }
+
+                    // Exit after first collision to prevent multiple collisions per frame
+                    return;
                 }
+            }
+        }
+    }
 
-                // Exit after first collision to prevent multiple collisions per frame
-                return;
+    // Check bullets vs enemies
+    for (auto& bullet : m_bullets) {
+        if (bullet->isAlive()) {
+            auto bulletBox = bullet->getCollisionBox();
+
+            for (auto& enemy : m_enemies) {
+                if (enemy->isAlive()) {
+                    auto enemyBox = enemy->getCollisionBox();
+
+                    if (CollisionSystem::checkCollision(bulletBox, enemyBox)) {
+                        bullet->onCollision(enemy.get());
+                        enemy->onCollision(bullet.get());
+                        break;
+                    }
+                }
             }
         }
     }
@@ -121,4 +156,24 @@ void GameScene::checkCollisions() {
 
 void GameScene::onEnemySpawned(std::unique_ptr<Enemy> enemy) {
     m_enemies.push_back(std::move(enemy));
+}
+
+void GameScene::spawnBullet(float x, float y, float velocityX, float velocityY, float damage) {
+    m_bullets.push_back(std::make_unique<Bullet>(x, y, velocityX, velocityY, damage));
+}
+
+void GameScene::updateBullets(float deltaTime) {
+    for (auto& bullet : m_bullets) {
+        bullet->update(deltaTime);
+    }
+}
+
+void GameScene::removeOffScreenBullets() {
+    m_bullets.erase(
+        std::remove_if(m_bullets.begin(), m_bullets.end(),
+            [](const std::unique_ptr<Bullet>& bullet) {
+                return bullet->isOffScreen() || !bullet->isAlive();
+            }),
+        m_bullets.end()
+    );
 }

@@ -24,6 +24,7 @@ set(SOURCES
     src/Game/Player.cpp
     src/Game/Enemy.cpp
     src/Game/Spawner.cpp
+    src/Game/Bullet.cpp
     src/Game/Entity.cpp
     src/Systems/InputSystem.cpp
     src/Systems/CollisionSystem.cpp
@@ -38,6 +39,7 @@ set(HEADERS
     src/Game/Player.h
     src/Game/Enemy.h
     src/Game/Spawner.h
+    src/Game/Bullet.h
     src/Game/Entity.h
     src/Systems/InputSystem.h
     src/Systems/CollisionSystem.h

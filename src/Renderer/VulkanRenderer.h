@@ -32,10 +32,11 @@ private:
     void initWindow();
     void initVulkan();
     void initImGui();
-    void createCommandBuffers();
-    void createSyncObjects();
     void createVertexBuffer();
     void createEnemyVertexBuffer();
+    void createBulletVertexBuffer();
+    void createCommandBuffers();
+    void createSyncObjects();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     GLFWwindow* m_window;
@@ -52,6 +53,9 @@ private:
 
     VkBuffer m_enemyVertexBuffer = VK_NULL_HANDLE;
     VkDeviceMemory m_enemyVertexBufferMemory = VK_NULL_HANDLE;
+
+    VkBuffer m_bulletVertexBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory m_bulletVertexBufferMemory = VK_NULL_HANDLE;
 
     VkDescriptorPool m_imguiDescriptorPool = VK_NULL_HANDLE;
 

@@ -7,6 +7,11 @@ Player::Player() : Entity(100.0f, 360.0f, GameConfig::getInstance().playerHitPoi
 }
 
 void Player::update(float deltaTime) {
+    // Update shoot cooldown
+    if (m_shootCooldown > 0.0f) {
+        m_shootCooldown -= deltaTime;
+    }
+
     // Update position based on velocity
     m_position.x += m_velocity.x * deltaTime;
     m_position.y += m_velocity.y * deltaTime;
@@ -20,6 +25,11 @@ void Player::update(float deltaTime) {
     if (m_position.x > config.screenWidth - halfWidth) m_position.x = config.screenWidth - halfWidth;
     if (m_position.y < halfHeight) m_position.y = halfHeight;
     if (m_position.y > config.screenHeight - halfHeight) m_position.y = config.screenHeight - halfHeight;
+}
+
+void Player::shoot() {
+    auto& config = GameConfig::getInstance();
+    m_shootCooldown = 1.0f / config.playerFireRate;
 }
 
 void Player::handleInput(const InputSystem& input, float deltaTime) {

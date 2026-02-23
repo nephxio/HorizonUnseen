@@ -106,7 +106,7 @@ void DebugConsole::renderMainConsole() {
 }
 
 void DebugConsole::renderPlayerStatsWindow() {
-    ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(400, 400), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImVec2(520, 10), ImGuiCond_FirstUseEver);
 
     bool open = true;
@@ -135,6 +135,27 @@ void DebugConsole::renderPlayerStatsWindow() {
         }
 
         ImGui::Separator();
+        ImGui::Text("Weapon Configuration");
+
+        // Fire Rate
+        ImGui::SliderFloat("Fire Rate", &config.playerFireRate, 0.1f, 10.0f, "%.1f shots/sec");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Number of shots per second");
+        }
+
+        // Bullet Damage
+        ImGui::SliderFloat("Bullet Damage", &config.playerBulletDamage, 1.0f, 100.0f, "%.1f");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Damage dealt by each bullet");
+        }
+
+        // Bullet Speed
+        ImGui::SliderFloat("Bullet Speed", &config.playerBulletSpeed, 100.0f, 1000.0f, "%.1f px/s");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Velocity of fired bullets");
+        }
+
+        ImGui::Separator();
         ImGui::Text("Note: Health changes apply to newly spawned player");
 
         ImGui::Separator();
@@ -144,6 +165,9 @@ void DebugConsole::renderPlayerStatsWindow() {
             config.playerHitPoints = 100.0f;
             config.playerMovementSpeedX = 200.0f;
             config.playerMovementSpeedY = 200.0f;
+            config.playerFireRate = 1.0f;
+            config.playerBulletDamage = 10.0f;
+            config.playerBulletSpeed = 500.0f;
         }
 
         ImGui::SameLine();
@@ -291,6 +315,9 @@ void DebugConsole::renderHUD(const GameScene* scene) {
 
         // Collision count
         ImGui::Text("Collisions: %d", scene->getCollisionCount());
+
+        // Bullet count
+        ImGui::Text("Bullets: %zu", scene->getBullets().size());
 
         // Player position
         ImGui::Text("Player: (%.0f, %.0f)", player.getPosition().x, player.getPosition().y);

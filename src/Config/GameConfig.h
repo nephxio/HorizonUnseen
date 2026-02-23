@@ -11,6 +11,9 @@ public:
     float playerHitPoints = 100.0f;
     float playerMovementSpeedX = 200.0f;
     float playerMovementSpeedY = 200.0f;
+    float playerFireRate = 1.0f;  // Shots per second
+    float playerBulletDamage = 10.0f;
+    float playerBulletSpeed = 500.0f;
 
     // Enemy Stats
     float enemyHitPoints = 10.0f;
