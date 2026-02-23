@@ -17,6 +17,11 @@ Enemy::Enemy(float x, float y)
 }
 
 void Enemy::update(float deltaTime) {
+    // Update shoot cooldown
+    if (m_shootCooldown > 0.0f) {
+        m_shootCooldown -= deltaTime;
+    }
+
     auto& config = GameConfig::getInstance();
 
     // State transitions

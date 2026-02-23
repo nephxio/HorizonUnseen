@@ -25,6 +25,8 @@ void VulkanRenderer::init() {
     createEnemyVertexBuffer();
     std::cout << " - createBulletVertexBuffer()" << std::endl;
     createBulletVertexBuffer();
+    std::cout << " - createEnemyBulletVertexBuffer()" << std::endl;
+    createEnemyBulletVertexBuffer();
     std::cout << " - createCommandBuffers()" << std::endl;
     createCommandBuffers();
     std::cout << " - createSyncObjects()" << std::endl;
@@ -323,6 +325,65 @@ void VulkanRenderer::createBulletVertexBuffer() {
     vkUnmapMemory(m_context->getDevice(), m_bulletVertexBufferMemory);
 }
 
+void VulkanRenderer::createEnemyBulletVertexBuffer() {
+    // Small square for enemy bullets: position (x, y) + color (r, g, b)
+    std::vector<float> vertices = {
+        // First triangle
+        -4.0f, -4.0f,  1.0f, 0.5f, 0.0f,  // Bottom-left (orange)
+         4.0f, -4.0f,  1.0f, 0.5f, 0.0f,  // Bottom-right (orange)
+         4.0f,  4.0f,  1.0f, 0.5f, 0.0f,  // Top-right (orange)
+
+        // Second triangle
+         4.0f,  4.0f,  1.0f, 0.5f, 0.0f,  // Top-right (orange)
+        -4.0f,  4.0f,  1.0f, 0.5f, 0.0f,  // Top-left (orange)
+        -4.0f, -4.0f,  1.0f, 0.5f, 0.0f   // Bottom-left (orange)
+    };
+
+    VkDeviceSize bufferSize = sizeof(float) * vertices.size();
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = bufferSize;
+    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(m_context->getDevice(), &bufferInfo, nullptr, &m_enemyBulletVertexBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create enemy bullet vertex buffer");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(m_context->getDevice(), m_enemyBulletVertexBuffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(m_context->getPhysicalDevice(), &memProperties);
+
+    uint32_t memoryTypeIndex = 0;
+    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+        if ((memRequirements.memoryTypeBits & (1 << i)) &&
+            (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            memoryTypeIndex = i;
+            break;
+        }
+    }
+    allocInfo.memoryTypeIndex = memoryTypeIndex;
+
+    if (vkAllocateMemory(m_context->getDevice(), &allocInfo, nullptr, &m_enemyBulletVertexBufferMemory) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate enemy bullet vertex buffer memory");
+    }
+
+    vkBindBufferMemory(m_context->getDevice(), m_enemyBulletVertexBuffer, m_enemyBulletVertexBufferMemory, 0);
+
+    void* data;
+    vkMapMemory(m_context->getDevice(), m_enemyBulletVertexBufferMemory, 0, bufferSize, 0, &data);
+    memcpy(data, vertices.data(), (size_t)bufferSize);
+    vkUnmapMemory(m_context->getDevice(), m_enemyBulletVertexBufferMemory);
+}
+
 void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -391,6 +452,23 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
         for (const auto& bullet : m_gameScene->getBullets()) {
             pushConstants.posX = bullet->getPosition().x;
             pushConstants.posY = bullet->getPosition().y;
+            pushConstants.scaleX = 1.0f;
+            pushConstants.scaleY = 1.0f;
+
+            vkCmdPushConstants(commandBuffer, m_context->getPipelineLayout(), 
+                              VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
+
+            vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+        }
+
+        // Draw enemy bullets (small orange squares)
+        VkBuffer enemyBulletVertexBuffers[] = {m_enemyBulletVertexBuffer};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, enemyBulletVertexBuffers, offsets);
+
+        auto enemyBullets = m_gameScene->getEnemyBulletPool().getActiveBullets();
+        for (const auto* enemyBullet : enemyBullets) {
+            pushConstants.posX = enemyBullet->getPosition().x;
+            pushConstants.posY = enemyBullet->getPosition().y;
             pushConstants.scaleX = 1.0f;
             pushConstants.scaleY = 1.0f;
 
@@ -520,6 +598,20 @@ void VulkanRenderer::cleanup() {
         }
         if (m_enemyVertexBufferMemory != VK_NULL_HANDLE) {
             vkFreeMemory(m_context->getDevice(), m_enemyVertexBufferMemory, nullptr);
+        }
+
+        if (m_bulletVertexBuffer != VK_NULL_HANDLE) {
+            vkDestroyBuffer(m_context->getDevice(), m_bulletVertexBuffer, nullptr);
+        }
+        if (m_bulletVertexBufferMemory != VK_NULL_HANDLE) {
+            vkFreeMemory(m_context->getDevice(), m_bulletVertexBufferMemory, nullptr);
+        }
+
+        if (m_enemyBulletVertexBuffer != VK_NULL_HANDLE) {
+            vkDestroyBuffer(m_context->getDevice(), m_enemyBulletVertexBuffer, nullptr);
+        }
+        if (m_enemyBulletVertexBufferMemory != VK_NULL_HANDLE) {
+            vkFreeMemory(m_context->getDevice(), m_enemyBulletVertexBufferMemory, nullptr);
         }
 
         if (m_imguiDescriptorPool != VK_NULL_HANDLE) {

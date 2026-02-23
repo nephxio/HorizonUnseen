@@ -183,7 +183,7 @@ void DebugConsole::renderPlayerStatsWindow() {
 }
 
 void DebugConsole::renderEnemyStatsWindow() {
-    ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(400, 500), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImVec2(520, 10), ImGuiCond_FirstUseEver);
 
     bool open = true;
@@ -194,17 +194,61 @@ void DebugConsole::renderEnemyStatsWindow() {
         ImGui::Separator();
 
         ImGui::SliderFloat("Hit Points", &config.enemyHitPoints, 1.0f, 100.0f, "%.1f");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Enemy health points");
+        }
+
+        ImGui::SliderFloat("Collision Damage", &config.enemyDamage, 1.0f, 100.0f, "%.1f");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Damage dealt to player on collision");
+        }
+
         ImGui::SliderFloat("Horizontal Speed", &config.enemyHorizontalSpeed, 50.0f, 400.0f, "%.1f px/s");
         ImGui::SliderFloat("Dive Speed", &config.enemyDiveSpeed, 100.0f, 600.0f, "%.1f px/s");
         ImGui::SliderFloat("Dive Angle", &config.enemyDiveAngle, 0.0f, 90.0f, "%.1f degrees");
 
         ImGui::Separator();
+        ImGui::Text("Enemy Weapon Configuration");
+
+        ImGui::SliderFloat("Fire Rate", &config.enemyFireRate, 0.1f, 5.0f, "%.1f shots/sec");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Enemy shots per second");
+        }
+
+        ImGui::SliderFloat("Bullet Damage", &config.enemyBulletDamage, 1.0f, 50.0f, "%.1f");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Damage per enemy bullet");
+        }
+
+        ImGui::SliderFloat("Bullet Speed", &config.enemyBulletSpeed, 50.0f, 500.0f, "%.1f px/s");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Enemy bullet velocity");
+        }
+
+        static int poolSize = config.enemyBulletPoolSize;
+        ImGui::SliderInt("Bullet Pool Size", &poolSize, 50, 500);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Maximum enemy bullets on screen\n(restart scene to apply)");
+        }
+
+        if (poolSize != config.enemyBulletPoolSize) {
+            if (ImGui::Button("Apply Pool Size (Restart Scene)")) {
+                config.enemyBulletPoolSize = poolSize;
+            }
+        }
+
+        ImGui::Separator();
 
         if (ImGui::Button("Reset to Default")) {
             config.enemyHitPoints = 10.0f;
+            config.enemyDamage = 50.0f;
             config.enemyHorizontalSpeed = 150.0f;
             config.enemyDiveSpeed = 300.0f;
             config.enemyDiveAngle = 30.0f;
+            config.enemyFireRate = 0.5f;
+            config.enemyBulletDamage = 10.0f;
+            config.enemyBulletSpeed = 200.0f;
+            poolSize = 100;
         }
 
         ImGui::SameLine();
@@ -318,6 +362,11 @@ void DebugConsole::renderHUD(const GameScene* scene) {
 
         // Bullet count
         ImGui::Text("Bullets: %zu", scene->getBullets().size());
+
+        // Enemy bullet count
+        ImGui::Text("Enemy Bullets: %zu / %zu", 
+                    scene->getEnemyBulletPool().getActiveCount(),
+                    scene->getEnemyBulletPool().getCapacity());
 
         // Player position
         ImGui::Text("Player: (%.0f, %.0f)", player.getPosition().x, player.getPosition().y);

@@ -35,6 +35,21 @@ void GameScene::update(float deltaTime, const InputSystem& input) {
     // Update bullets
     updateBullets(deltaTime);
 
+    // Update enemy bullet pool
+    m_enemyBulletPool.update(deltaTime);
+
+    // Enemy shooting logic
+    for (auto& enemy : m_enemies) {
+        if (enemy->isAlive() && enemy->canShoot()) {
+            Vector2 enemyPos = enemy->getPosition();
+            // Shoot towards player (simple straight shot for now)
+            spawnEnemyBullet(enemyPos.x - 20.0f, enemyPos.y, 
+                            -GameConfig::getInstance().enemyBulletSpeed, 0.0f,
+                            GameConfig::getInstance().enemyBulletDamage);
+            enemy->shoot();
+        }
+    }
+
     // Check collisions
     checkCollisions();
 
@@ -152,6 +167,30 @@ void GameScene::checkCollisions() {
             }
         }
     }
+
+    // Check enemy bullets vs player
+    if (m_player.isAlive()) {
+        auto playerBox = m_player.getCollisionBox();
+        auto enemyBullets = m_enemyBulletPool.getActiveBullets();
+
+        for (auto* enemyBullet : enemyBullets) {
+            if (enemyBullet->isActive()) {
+                auto bulletBox = enemyBullet->getCollisionBox();
+
+                if (CollisionSystem::checkCollision(playerBox, bulletBox)) {
+                    // Only process if cooldown elapsed
+                    if (m_lastCollisionTime >= m_collisionCooldown) {
+                        m_collisionCount++;
+                        m_lastCollisionTime = 0.0f;
+
+                        m_player.onCollision(enemyBullet);
+                        enemyBullet->onCollision(&m_player);
+                    }
+                    break;
+                }
+            }
+        }
+    }
 }
 
 void GameScene::onEnemySpawned(std::unique_ptr<Enemy> enemy) {
@@ -160,6 +199,10 @@ void GameScene::onEnemySpawned(std::unique_ptr<Enemy> enemy) {
 
 void GameScene::spawnBullet(float x, float y, float velocityX, float velocityY, float damage) {
     m_bullets.push_back(std::make_unique<Bullet>(x, y, velocityX, velocityY, damage));
+}
+
+void GameScene::spawnEnemyBullet(float x, float y, float velocityX, float velocityY, float damage) {
+    m_enemyBulletPool.acquire(x, y, velocityX, velocityY, damage);
 }
 
 void GameScene::updateBullets(float deltaTime) {

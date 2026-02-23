@@ -35,6 +35,7 @@ private:
     void createVertexBuffer();
     void createEnemyVertexBuffer();
     void createBulletVertexBuffer();
+    void createEnemyBulletVertexBuffer();
     void createCommandBuffers();
     void createSyncObjects();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
@@ -56,6 +57,9 @@ private:
 
     VkBuffer m_bulletVertexBuffer = VK_NULL_HANDLE;
     VkDeviceMemory m_bulletVertexBufferMemory = VK_NULL_HANDLE;
+
+    VkBuffer m_enemyBulletVertexBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory m_enemyBulletVertexBufferMemory = VK_NULL_HANDLE;
 
     VkDescriptorPool m_imguiDescriptorPool = VK_NULL_HANDLE;
 

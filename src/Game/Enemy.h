@@ -2,6 +2,7 @@
 
 #include "Entity.h"
 #include "Systems/CollisionSystem.h"
+#include "Config/GameConfig.h"
 
 enum class EnemyState {
     MovingLeft,
@@ -13,6 +14,10 @@ public:
     Enemy(float x, float y);
 
     void update(float deltaTime) override;
+
+    bool canShoot() const { return m_shootCooldown <= 0.0f; }
+    void shoot() { m_shootCooldown = 1.0f / GameConfig::getInstance().enemyFireRate; }
+    float getShootCooldown() const { return m_shootCooldown; }
 
     bool isOffScreen() const;
     EnemyState getState() const { return m_state; }
@@ -26,4 +31,5 @@ public:
 private:
     EnemyState m_state;
     float m_diveThreshold;
+    float m_shootCooldown = 0.0f;
 };

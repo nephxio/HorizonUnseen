@@ -22,6 +22,12 @@ public:
     float enemyDiveSpeed = 300.0f;
     float enemyDiveAngle = 30.0f;
 
+    // Enemy Bullet Stats
+    float enemyBulletDamage = 10.0f;
+    float enemyBulletSpeed = 200.0f;
+    float enemyFireRate = 0.5f;  // Shots per second
+    int enemyBulletPoolSize = 100;  // Maximum enemy bullets on screen
+
     // Spawner Settings
     float spawnerBaseInterval = 2.5f;
     float spawnerIntervalIncrement = 0.5f;

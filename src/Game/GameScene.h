@@ -4,6 +4,7 @@
 #include "Enemy.h"
 #include "Spawner.h"
 #include "Bullet.h"
+#include "BulletPool.h"
 #include <memory>
 #include <vector>
 
@@ -18,10 +19,13 @@ public:
     const Player& getPlayer() const { return m_player; }
     const std::vector<std::unique_ptr<Enemy>>& getEnemies() const { return m_enemies; }
     const std::vector<std::unique_ptr<Bullet>>& getBullets() const { return m_bullets; }
+    BulletPool& getEnemyBulletPool() { return m_enemyBulletPool; }
+    const BulletPool& getEnemyBulletPool() const { return m_enemyBulletPool; }
 
     int getCollisionCount() const { return m_collisionCount; }
 
     void spawnBullet(float x, float y, float velocityX, float velocityY, float damage);
+    void spawnEnemyBullet(float x, float y, float velocityX, float velocityY, float damage);
 
 private:
     void initializeSpawners();
@@ -39,9 +43,11 @@ private:
     std::vector<std::unique_ptr<Bullet>> m_bullets;
     std::vector<std::unique_ptr<Spawner>> m_spawners;
 
+    BulletPool m_enemyBulletPool;
+
     int m_collisionCount = 0;
     float m_lastCollisionTime = 0.0f;
-    float m_collisionCooldown = 0.5f;  // Half second between collisions
+    float m_collisionCooldown = 0.5f;
 
     // TODO: Add these systems:
     // std::vector<std::unique_ptr<Bullet>> m_bullets;
