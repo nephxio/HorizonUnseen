@@ -8,7 +8,8 @@ enum class DebugWindow {
     None,
     PlayerStats,
     EnemyStats,
-    SpawnerSettings
+    SpawnerSettings,
+    GameState
 };
 
 class DebugConsole {
@@ -20,7 +21,10 @@ public:
 
     void processCommand(const std::string& command);
     void render();
-    
+    void renderHUD(const class GameScene* scene);
+
+    void showSaveLoadStatus(const std::string& message, bool success);
+
     void toggleConsole() { m_showConsole = !m_showConsole; }
     void setVisible(bool visible) { m_showConsole = visible; }
     bool isVisible() const { return m_showConsole; }
@@ -35,10 +39,15 @@ private:
     void renderPlayerStatsWindow();
     void renderEnemyStatsWindow();
     void renderSpawnerSettingsWindow();
+    void renderGameStateWindow();
 
     bool m_showConsole = false;
     DebugWindow m_currentWindow = DebugWindow::None;
-    
+
     char m_commandBuffer[256] = {};
     std::vector<std::string> m_commandHistory;
+
+    std::string m_statusMessage;
+    bool m_statusSuccess = true;
+    float m_statusTimer = 0.0f;
 };

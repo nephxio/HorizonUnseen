@@ -28,3 +28,7 @@ external/imgui/
 # IDE
 .vscode/
 .idea/
+
+# Game data files
+*.dat
+game.dat

@@ -30,6 +30,7 @@ set(SOURCES
     src/Game/Entity.cpp
     src/Systems/InputSystem.cpp
     src/Systems/CollisionSystem.cpp
+    src/Config/ConfigManager.cpp
     src/Debug/DebugConsole.cpp
 )
 
@@ -48,6 +49,7 @@ set(HEADERS
     src/Systems/InputSystem.h
     src/Systems/CollisionSystem.h
     src/Config/GameConfig.h
+    src/Config/ConfigManager.h
     src/Debug/DebugConsole.h
 )
 

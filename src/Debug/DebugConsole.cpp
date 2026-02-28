@@ -1,5 +1,6 @@
 #include "DebugConsole.h"
 #include "Config/GameConfig.h"
+#include "Config/ConfigManager.h"
 #include "Game/GameScene.h"
 #include <imgui.h>
 #include <sstream>
@@ -48,7 +49,27 @@ void DebugConsole::processCommand(const std::string& command) {
 }
 
 void DebugConsole::render() {
-    if (!m_showConsole) return;
+    // Update status timer
+    if (m_statusTimer > 0.0f) {
+        m_statusTimer -= ImGui::GetIO().DeltaTime;
+    }
+
+    if (!m_showConsole) {
+        // Still show status messages even if console is hidden
+        if (m_statusTimer > 0.0f) {
+            ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, 50), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+            ImGui::SetNextWindowBgAlpha(0.8f);
+            ImGui::Begin("##StatusMessage", nullptr, 
+                         ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | 
+                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize);
+
+            ImVec4 color = m_statusSuccess ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f) : ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+            ImGui::TextColored(color, "%s", m_statusMessage.c_str());
+
+            ImGui::End();
+        }
+        return;
+    }
 
     renderMainConsole();
 
@@ -66,6 +87,26 @@ void DebugConsole::render() {
         default:
             break;
     }
+
+    // Show save/load status message if active
+    if (m_statusTimer > 0.0f) {
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, 50), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+        ImGui::SetNextWindowBgAlpha(0.8f);
+        ImGui::Begin("##StatusMessage", nullptr, 
+                     ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | 
+                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize);
+
+        ImVec4 color = m_statusSuccess ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f) : ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+        ImGui::TextColored(color, "%s", m_statusMessage.c_str());
+
+        ImGui::End();
+    }
+}
+
+void DebugConsole::showSaveLoadStatus(const std::string& message, bool success) {
+    m_statusMessage = message;
+    m_statusSuccess = success;
+    m_statusTimer = 3.0f;
 }
 
 void DebugConsole::renderMainConsole() {
@@ -174,6 +215,27 @@ void DebugConsole::renderPlayerStatsWindow() {
         if (ImGui::Button("Close")) {
             open = false;
         }
+
+        ImGui::Separator();
+        ImGui::Text("Save/Load Configuration");
+
+        if (ImGui::Button("Save Config to File")) {
+            if (ConfigManager::saveConfig(config)) {
+                showSaveLoadStatus("Configuration saved successfully!", true);
+            } else {
+                showSaveLoadStatus("Failed to save: " + ConfigManager::getLastError(), false);
+            }
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Load Config from File")) {
+            if (ConfigManager::loadConfig(config)) {
+                showSaveLoadStatus("Configuration loaded successfully!", true);
+            } else {
+                showSaveLoadStatus("Failed to load: " + ConfigManager::getLastError(), false);
+            }
+        }
     }
     ImGui::End();
 
@@ -238,6 +300,28 @@ void DebugConsole::renderEnemyStatsWindow() {
         }
 
         ImGui::Separator();
+        ImGui::Text("Save/Load Configuration");
+
+        if (ImGui::Button("Save Config to File")) {
+            if (ConfigManager::saveConfig(config)) {
+                showSaveLoadStatus("Configuration saved successfully!", true);
+            } else {
+                showSaveLoadStatus("Failed to save: " + ConfigManager::getLastError(), false);
+            }
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Load Config from File")) {
+            if (ConfigManager::loadConfig(config)) {
+                poolSize = config.enemyBulletPoolSize;
+                showSaveLoadStatus("Configuration loaded successfully!", true);
+            } else {
+                showSaveLoadStatus("Failed to load: " + ConfigManager::getLastError(), false);
+            }
+        }
+
+        ImGui::Separator();
 
         if (ImGui::Button("Reset to Default")) {
             config.enemyHitPoints = 10.0f;
@@ -294,6 +378,27 @@ void DebugConsole::renderSpawnerSettingsWindow() {
         ImGui::SameLine();
         if (ImGui::Button("Close")) {
             open = false;
+        }
+
+        ImGui::Separator();
+        ImGui::Text("Save/Load Configuration");
+
+        if (ImGui::Button("Save Config to File")) {
+            if (ConfigManager::saveConfig(config)) {
+                showSaveLoadStatus("Configuration saved successfully!", true);
+            } else {
+                showSaveLoadStatus("Failed to save: " + ConfigManager::getLastError(), false);
+            }
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Load Config from File")) {
+            if (ConfigManager::loadConfig(config)) {
+                showSaveLoadStatus("Configuration loaded successfully!", true);
+            } else {
+                showSaveLoadStatus("Failed to load: " + ConfigManager::getLastError(), false);
+            }
         }
     }
     ImGui::End();
