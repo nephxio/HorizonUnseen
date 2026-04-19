@@ -3,5 +3,5 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="HorizonUnseen/HorizonUnseen.vcxproj" />
+  <Project Path="HorizonUnseen/HorizonUnseen.vcxproj" Id="3e0b812c-bc0f-458f-9d32-50964f513827" />
 </Solution>

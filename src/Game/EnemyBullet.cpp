@@ -54,6 +54,8 @@ CollisionBox EnemyBullet::getCollisionBox() const {
 }
 
 void EnemyBullet::onCollision(ICollidable* other) {
-    // Enemy bullet dies on collision
+    if (other) {
+        // Player takes damage via collision handling elsewhere; bullet just deactivates.
+    }
     deactivate();
 }
