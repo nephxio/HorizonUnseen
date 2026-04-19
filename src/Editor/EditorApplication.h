@@ -1,12 +1,16 @@
 #pragma once
 
-#include "Renderer/VulkanContext.h"
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#include <vulkan/vulkan.h>
-#include <vector>
+
 #include <memory>
 
-class EditorApplication {
+#include "Game/GameSession.h"
+#include "Rendering/SceneRenderer.h"
+#include "Rendering/VulkanFrameHost.h"
+#include "Utility/FrameTimer.h"
+
+class EditorApplication : public IVulkanFrameClient {
 public:
     EditorApplication();
     ~EditorApplication();
@@ -15,35 +19,38 @@ public:
 
 private:
     void init();
-    void initWindow();
-    void initVulkan();
-    void initImGui();
-    void createCommandBuffers();
-    void createSyncObjects();
-    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-    void renderUI();
+    void initViewportResources();
+    void updateViewportTexture();
+    void cleanupViewportResources();
+    void renderFrame();
+    VkClearValue getClearColor() const override;
+    void recordScene(VkCommandBuffer commandBuffer) override;
+    void renderUi() override;
     void renderDockspace();
     void renderHierarchyPanel();
     void renderInspectorPanel();
     void renderContentBrowserPanel();
     void renderViewportPanel();
-    void beginFrame();
-    void endFrame();
     void cleanup();
 
-    GLFWwindow* m_window = nullptr;
-    std::unique_ptr<VulkanContext> m_context;
-
-    std::vector<VkCommandBuffer> m_commandBuffers;
-    std::vector<VkSemaphore> m_imageAvailableSemaphores;
-    std::vector<VkSemaphore> m_renderFinishedSemaphores;
-    std::vector<VkFence> m_inFlightFences;
-
-    VkDescriptorPool m_imguiDescriptorPool = VK_NULL_HANDLE;
-
-    uint32_t m_currentFrame = 0;
-    uint32_t m_imageIndex = 0;
+    VulkanFrameHost m_frameHost;
+    SceneRenderer m_sceneRenderer;
+    std::unique_ptr<GameSession> m_gameSession;
+    FrameTimer m_frameTimer;
     bool m_isCleanedUp = false;
+
+    VkImage m_viewportImage = VK_NULL_HANDLE;
+    VkDeviceMemory m_viewportImageMemory = VK_NULL_HANDLE;
+    VkImageView m_viewportImageView = VK_NULL_HANDLE;
+    VkSampler m_viewportSampler = VK_NULL_HANDLE;
+    VkDescriptorSet m_viewportDescriptorSet = VK_NULL_HANDLE;
+    VkCommandBuffer m_viewportCommandBuffer = VK_NULL_HANDLE;
+    VkRenderPass m_viewportRenderPass = VK_NULL_HANDLE;
+    VkFramebuffer m_viewportFramebuffer = VK_NULL_HANDLE;
+    VkExtent2D m_viewportExtent{};
+    bool m_viewportResourcesCreated = false;
+    bool m_viewportImageReady = false;
+    float m_viewportAnimation = 0.0f;
 
     int m_selectedItem = -1;
     bool m_showHierarchy = true;
@@ -51,7 +58,6 @@ private:
     bool m_showContentBrowser = true;
     bool m_showViewport = true;
 
-    static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
     const uint32_t WIDTH = 1280;
     const uint32_t HEIGHT = 720;
 };

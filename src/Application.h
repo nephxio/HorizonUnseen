@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Renderer/VulkanRenderer.h"
-#include "Game/GameScene.h"
-#include "Systems/InputSystem.h"
+#include "Game/GameSession.h"
+#include "Utility/FrameTimer.h"
 #include <memory>
 
 class Application {
@@ -17,11 +17,10 @@ private:
     void mainLoop();
     void cleanup();
     void update(float deltaTime);
-    void render();
 
     std::unique_ptr<VulkanRenderer> m_renderer;
-    std::unique_ptr<GameScene> m_gameScene;
-    std::unique_ptr<InputSystem> m_inputSystem;
+    std::unique_ptr<GameSession> m_gameSession;
+    FrameTimer m_frameTimer;
 
     bool m_running;
     bool m_lastTildeState = false;

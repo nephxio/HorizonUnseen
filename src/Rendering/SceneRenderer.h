@@ -3,46 +3,29 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
-#include <vector>
 
-#include "Rendering/VulkanFrameHost.h"
+#include <memory>
 
 class GameScene;
 class VulkanContext;
 
-class VulkanRenderer : public IVulkanFrameClient {
+class SceneRenderer {
 public:
-    VulkanRenderer();
-    ~VulkanRenderer();
+    SceneRenderer() = default;
+    ~SceneRenderer();
 
-    void init();
+    void init(VulkanContext& context);
+    void record(VkCommandBuffer commandBuffer, const GameScene& scene) const;
     void cleanup();
 
-    void renderFrame();
-
-    VkClearValue getClearColor() const override;
-    void recordScene(VkCommandBuffer commandBuffer) override;
-    void renderUi() override;
-
-    bool shouldClose() const;
-    void waitIdle();
-    GLFWwindow* getWindow() const { return m_window; }
-
-    void setGameScene(const GameScene* scene) { m_gameScene = scene; }
-
 private:
-    void initWindow();
-    void initVulkan();
-    void initImGui();
     void createVertexBuffer();
     void createEnemyVertexBuffer();
     void createBulletVertexBuffer();
     void createEnemyBulletVertexBuffer();
 
-    GLFWwindow* m_window;
     VulkanContext* m_context = nullptr;
-    VulkanFrameHost m_frameHost;
-    const GameScene* m_gameScene = nullptr;
+    bool m_isInitialized = false;
 
     VkBuffer m_vertexBuffer = VK_NULL_HANDLE;
     VkDeviceMemory m_vertexBufferMemory = VK_NULL_HANDLE;
@@ -55,9 +38,4 @@ private:
 
     VkBuffer m_enemyBulletVertexBuffer = VK_NULL_HANDLE;
     VkDeviceMemory m_enemyBulletVertexBufferMemory = VK_NULL_HANDLE;
-
-    bool m_isCleanedUp = false;
-
-    const uint32_t WIDTH = 1280;
-    const uint32_t HEIGHT = 720;
 };

@@ -1,9 +1,27 @@
 #include "EditorApplication.h"
+
 #include <imgui.h>
-#include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
+
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
+
+namespace {
+uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+    VkPhysicalDeviceMemoryProperties memProperties{};
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i) {
+        if ((typeFilter & (1u << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("Failed to find suitable memory type for viewport texture");
+}
+}
 
 EditorApplication::EditorApplication() {
     init();
@@ -14,159 +32,258 @@ EditorApplication::~EditorApplication() {
 }
 
 void EditorApplication::init() {
-    initWindow();
-    initVulkan();
-    initImGui();
-    createCommandBuffers();
-    createSyncObjects();
+    m_frameHost.init({ "Horizon Unseen Editor", WIDTH, HEIGHT, true });
+    m_gameSession = std::make_unique<GameSession>(m_frameHost.getWindow());
+    m_sceneRenderer.init(m_frameHost.getContext());
+    initViewportResources();
 }
 
-void EditorApplication::initWindow() {
-    if (!glfwInit()) {
-        throw std::runtime_error("Failed to initialize GLFW");
+void EditorApplication::initViewportResources() {
+    auto& context = m_frameHost.getContext();
+    m_viewportExtent = context.getSwapchainExtent();
+
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.format = context.getSwapchainImageFormat();
+    imageInfo.extent = { m_viewportExtent.width, m_viewportExtent.height, 1 };
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    if (vkCreateImage(context.getDevice(), &imageInfo, nullptr, &m_viewportImage) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create editor viewport image");
     }
 
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+    VkMemoryRequirements memoryRequirements{};
+    vkGetImageMemoryRequirements(context.getDevice(), m_viewportImage, &memoryRequirements);
 
-    m_window = glfwCreateWindow(WIDTH, HEIGHT, "Horizon Unseen Editor", nullptr, nullptr);
-    if (!m_window) {
-        throw std::runtime_error("Failed to create editor window");
-    }
-}
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memoryRequirements.size;
+    allocInfo.memoryTypeIndex = findMemoryType(
+        context.getPhysicalDevice(),
+        memoryRequirements.memoryTypeBits,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-void EditorApplication::initVulkan() {
-    m_context = std::make_unique<VulkanContext>();
-    m_context->init(m_window);
-}
-
-void EditorApplication::initImGui() {
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-
-    ImGui::StyleColorsDark();
-    ImGui_ImplGlfw_InitForVulkan(m_window, true);
-
-    VkDescriptorPoolSize poolSizes[] = {
-        { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
-    };
-
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    poolInfo.maxSets = 1000;
-    poolInfo.poolSizeCount = static_cast<uint32_t>(std::size(poolSizes));
-    poolInfo.pPoolSizes = poolSizes;
-
-    if (vkCreateDescriptorPool(m_context->getDevice(), &poolInfo, nullptr, &m_imguiDescriptorPool) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create editor ImGui descriptor pool");
+    if (vkAllocateMemory(context.getDevice(), &allocInfo, nullptr, &m_viewportImageMemory) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate editor viewport image memory");
     }
 
-    ImGui_ImplVulkan_InitInfo initInfo{};
-    initInfo.ApiVersion = VK_API_VERSION_1_2;
-    initInfo.Instance = m_context->getInstance();
-    initInfo.PhysicalDevice = m_context->getPhysicalDevice();
-    initInfo.Device = m_context->getDevice();
-    initInfo.QueueFamily = 0;
-    initInfo.Queue = m_context->getGraphicsQueue();
-    initInfo.PipelineCache = VK_NULL_HANDLE;
-    initInfo.DescriptorPool = m_imguiDescriptorPool;
-    initInfo.MinImageCount = MAX_FRAMES_IN_FLIGHT;
-    initInfo.ImageCount = MAX_FRAMES_IN_FLIGHT;
-    initInfo.Allocator = nullptr;
-    initInfo.CheckVkResultFn = nullptr;
-    initInfo.PipelineInfoMain.RenderPass = m_context->getRenderPass();
-    initInfo.PipelineInfoMain.Subpass = 0;
-    initInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-    initInfo.UseDynamicRendering = false;
+    vkBindImageMemory(context.getDevice(), m_viewportImage, m_viewportImageMemory, 0);
 
-    ImGui_ImplVulkan_Init(&initInfo);
-}
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = m_viewportImage;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = context.getSwapchainImageFormat();
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
 
-void EditorApplication::createCommandBuffers() {
-    m_commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = m_context->getCommandPool();
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = static_cast<uint32_t>(m_commandBuffers.size());
-
-    if (vkAllocateCommandBuffers(m_context->getDevice(), &allocInfo, m_commandBuffers.data()) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to allocate editor command buffers");
+    if (vkCreateImageView(context.getDevice(), &viewInfo, nullptr, &m_viewportImageView) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create editor viewport image view");
     }
-}
 
-void EditorApplication::createSyncObjects() {
-    m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+    VkAttachmentDescription colorAttachment{};
+    colorAttachment.format = context.getSwapchainImageFormat();
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    VkSemaphoreCreateInfo semaphoreInfo{};
-    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    VkAttachmentReference colorAttachmentRef{};
+    colorAttachmentRef.attachment = 0;
+    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorAttachmentRef;
 
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-        if (vkCreateSemaphore(m_context->getDevice(), &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) != VK_SUCCESS ||
-            vkCreateSemaphore(m_context->getDevice(), &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]) != VK_SUCCESS ||
-            vkCreateFence(m_context->getDevice(), &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create editor sync objects");
-        }
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = 1;
+    renderPassInfo.pDependencies = &dependency;
+
+    if (vkCreateRenderPass(context.getDevice(), &renderPassInfo, nullptr, &m_viewportRenderPass) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create editor viewport render pass");
     }
+
+    VkImageView attachments[] = { m_viewportImageView };
+    VkFramebufferCreateInfo framebufferInfo{};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = m_viewportRenderPass;
+    framebufferInfo.attachmentCount = 1;
+    framebufferInfo.pAttachments = attachments;
+    framebufferInfo.width = m_viewportExtent.width;
+    framebufferInfo.height = m_viewportExtent.height;
+    framebufferInfo.layers = 1;
+
+    if (vkCreateFramebuffer(context.getDevice(), &framebufferInfo, nullptr, &m_viewportFramebuffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create editor viewport framebuffer");
+    }
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.maxAnisotropy = 1.0f;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+    if (vkCreateSampler(context.getDevice(), &samplerInfo, nullptr, &m_viewportSampler) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create editor viewport sampler");
+    }
+
+    m_viewportDescriptorSet = reinterpret_cast<VkDescriptorSet>(ImGui_ImplVulkan_AddTexture(
+        m_viewportSampler,
+        m_viewportImageView,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+
+    VkCommandBufferAllocateInfo allocCmdInfo{};
+    allocCmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocCmdInfo.commandPool = context.getCommandPool();
+    allocCmdInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocCmdInfo.commandBufferCount = 1;
+
+    if (vkAllocateCommandBuffers(context.getDevice(), &allocCmdInfo, &m_viewportCommandBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate editor viewport command buffer");
+    }
+
+    m_viewportResourcesCreated = true;
 }
 
 void EditorApplication::run() {
-    while (m_window && !glfwWindowShouldClose(m_window)) {
-        glfwPollEvents();
-        beginFrame();
-        renderUI();
-        endFrame();
+    while (m_frameHost.getWindow() && !m_frameHost.shouldClose()) {
+        renderFrame();
     }
 
-    if (m_context) {
-        m_context->waitIdle();
-    }
+    m_frameHost.waitIdle();
 }
 
-void EditorApplication::beginFrame() {
-    vkWaitForFences(m_context->getDevice(), 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
-
-    VkResult result = vkAcquireNextImageKHR(
-        m_context->getDevice(),
-        m_context->getSwapchain(),
-        UINT64_MAX,
-        m_imageAvailableSemaphores[m_currentFrame],
-        VK_NULL_HANDLE,
-        &m_imageIndex);
-
-    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-        throw std::runtime_error("Failed to acquire swap chain image for editor");
-    }
-
-    vkResetFences(m_context->getDevice(), 1, &m_inFlightFences[m_currentFrame]);
-    vkResetCommandBuffer(m_commandBuffers[m_currentFrame], 0);
-    recordCommandBuffer(m_commandBuffers[m_currentFrame], m_imageIndex);
+void EditorApplication::renderFrame() {
+    m_frameHost.renderFrame(*this);
 }
 
-void EditorApplication::renderUI() {
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
+VkClearValue EditorApplication::getClearColor() const {
+    return {{{0.08f, 0.08f, 0.10f, 1.0f}}};
+}
+
+void EditorApplication::recordScene(VkCommandBuffer) {
+    // The viewport texture is rendered separately; this hook is unused for the editor scene pass.
+}
+
+void EditorApplication::updateViewportTexture() {
+    if (!m_viewportResourcesCreated) {
+        return;
+    }
+
+    auto& context = m_frameHost.getContext();
+    m_gameSession->update(m_frameTimer.tick());
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkResetCommandBuffer(m_viewportCommandBuffer, 0);
+    if (vkBeginCommandBuffer(m_viewportCommandBuffer, &beginInfo) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to begin viewport command buffer");
+    }
+
+    VkImageMemoryBarrier toColorAttachment{};
+    toColorAttachment.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    toColorAttachment.oldLayout = m_viewportImageReady ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
+    toColorAttachment.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    toColorAttachment.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toColorAttachment.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toColorAttachment.image = m_viewportImage;
+    toColorAttachment.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    toColorAttachment.subresourceRange.baseMipLevel = 0;
+    toColorAttachment.subresourceRange.levelCount = 1;
+    toColorAttachment.subresourceRange.baseArrayLayer = 0;
+    toColorAttachment.subresourceRange.layerCount = 1;
+    toColorAttachment.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    toColorAttachment.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    vkCmdPipelineBarrier(
+        m_viewportCommandBuffer,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &toColorAttachment);
+
+    VkClearValue clearColor = getClearColor();
+    VkImageSubresourceRange clearRange{};
+    clearRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    clearRange.baseMipLevel = 0;
+    clearRange.levelCount = 1;
+    clearRange.baseArrayLayer = 0;
+    clearRange.layerCount = 1;
+
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = m_viewportRenderPass;
+    renderPassInfo.framebuffer = m_viewportFramebuffer;
+    renderPassInfo.renderArea.offset = { 0, 0 };
+    renderPassInfo.renderArea.extent = m_viewportExtent;
+    renderPassInfo.clearValueCount = 1;
+    renderPassInfo.pClearValues = &clearValue;
+
+    vkCmdBeginRenderPass(m_viewportCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    m_sceneRenderer.record(m_viewportCommandBuffer, m_gameSession->getScene());
+
+    vkCmdEndRenderPass(m_viewportCommandBuffer);
+
+    m_viewportImageReady = true;
+
+    if (vkEndCommandBuffer(m_viewportCommandBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to end viewport command buffer");
+    }
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &m_viewportCommandBuffer;
+
+    if (vkQueueSubmit(context.getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to submit viewport texture update");
+    }
+
+    vkQueueWaitIdle(context.getGraphicsQueue());
+    m_viewportAnimation += 0.05f;
+}
+
+void EditorApplication::renderUi() {
+    updateViewportTexture();
 
     renderDockspace();
 
@@ -174,8 +291,6 @@ void EditorApplication::renderUI() {
     if (m_showInspector) renderInspectorPanel();
     if (m_showContentBrowser) renderContentBrowserPanel();
     if (m_showViewport) renderViewportPanel();
-
-    ImGui::Render();
 }
 
 void EditorApplication::renderDockspace() {
@@ -195,7 +310,7 @@ void EditorApplication::renderDockspace() {
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Exit")) {
-                glfwSetWindowShouldClose(m_window, GLFW_TRUE);
+                glfwSetWindowShouldClose(m_frameHost.getWindow(), GLFW_TRUE);
             }
             ImGui::EndMenu();
         }
@@ -245,72 +360,75 @@ void EditorApplication::renderContentBrowserPanel() {
 
 void EditorApplication::renderViewportPanel() {
     ImGui::Begin("Viewport", &m_showViewport);
-    ImGui::Text("Blank editor viewport placeholder.");
-    ImGui::Text("Stage 3 will embed the game view here.");
+    ImVec2 available = ImGui::GetContentRegionAvail();
+    float aspect = static_cast<float>(m_viewportExtent.width) / static_cast<float>(m_viewportExtent.height);
+
+    ImVec2 imageSize = available;
+    if (available.x > 0.0f && available.y > 0.0f) {
+        if ((available.x / available.y) > aspect) {
+            imageSize.y = available.y;
+            imageSize.x = imageSize.y * aspect;
+        } else {
+            imageSize.x = available.x;
+            imageSize.y = imageSize.x / aspect;
+        }
+    }
+
+    if (m_viewportDescriptorSet != VK_NULL_HANDLE) {
+        ImGui::Image(reinterpret_cast<ImTextureID>(m_viewportDescriptorSet), imageSize);
+    } else {
+        ImGui::TextUnformatted("Viewport texture is not available.");
+    }
+
     ImGui::End();
 }
 
-void EditorApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+void EditorApplication::cleanupViewportResources() {
+    auto& context = m_frameHost.getContext();
 
-    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to begin editor command buffer");
+    if (m_viewportResourcesCreated) {
+        if (m_viewportDescriptorSet != VK_NULL_HANDLE) {
+            ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<ImTextureID>(m_viewportDescriptorSet));
+            m_viewportDescriptorSet = VK_NULL_HANDLE;
+        }
+
+        if (m_viewportCommandBuffer != VK_NULL_HANDLE) {
+            vkFreeCommandBuffers(context.getDevice(), context.getCommandPool(), 1, &m_viewportCommandBuffer);
+            m_viewportCommandBuffer = VK_NULL_HANDLE;
+        }
+
+        if (m_viewportFramebuffer != VK_NULL_HANDLE) {
+            vkDestroyFramebuffer(context.getDevice(), m_viewportFramebuffer, nullptr);
+            m_viewportFramebuffer = VK_NULL_HANDLE;
+        }
+
+        if (m_viewportRenderPass != VK_NULL_HANDLE) {
+            vkDestroyRenderPass(context.getDevice(), m_viewportRenderPass, nullptr);
+            m_viewportRenderPass = VK_NULL_HANDLE;
+        }
+
+        if (m_viewportSampler != VK_NULL_HANDLE) {
+            vkDestroySampler(context.getDevice(), m_viewportSampler, nullptr);
+            m_viewportSampler = VK_NULL_HANDLE;
+        }
+
+        if (m_viewportImageView != VK_NULL_HANDLE) {
+            vkDestroyImageView(context.getDevice(), m_viewportImageView, nullptr);
+            m_viewportImageView = VK_NULL_HANDLE;
+        }
+
+        if (m_viewportImage != VK_NULL_HANDLE) {
+            vkDestroyImage(context.getDevice(), m_viewportImage, nullptr);
+            m_viewportImage = VK_NULL_HANDLE;
+        }
+
+        if (m_viewportImageMemory != VK_NULL_HANDLE) {
+            vkFreeMemory(context.getDevice(), m_viewportImageMemory, nullptr);
+            m_viewportImageMemory = VK_NULL_HANDLE;
+        }
+
+        m_viewportResourcesCreated = false;
     }
-
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = m_context->getRenderPass();
-    renderPassInfo.framebuffer = m_context->getFramebuffers()[imageIndex];
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = m_context->getSwapchainExtent();
-
-    VkClearValue clearColor = {{{0.08f, 0.08f, 0.10f, 1.0f}}};
-    renderPassInfo.clearValueCount = 1;
-    renderPassInfo.pClearValues = &clearColor;
-
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
-    vkCmdEndRenderPass(commandBuffer);
-
-    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to end editor command buffer");
-    }
-}
-
-void EditorApplication::endFrame() {
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-    VkSemaphore waitSemaphores[] = { m_imageAvailableSemaphores[m_currentFrame] };
-    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = waitSemaphores;
-    submitInfo.pWaitDstStageMask = waitStages;
-
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &m_commandBuffers[m_currentFrame];
-
-    VkSemaphore signalSemaphores[] = { m_renderFinishedSemaphores[m_currentFrame] };
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = signalSemaphores;
-
-    if (vkQueueSubmit(m_context->getGraphicsQueue(), 1, &submitInfo, m_inFlightFences[m_currentFrame]) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to submit editor draw command buffer");
-    }
-
-    VkPresentInfoKHR presentInfo{};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = signalSemaphores;
-
-    VkSwapchainKHR swapChains[] = { m_context->getSwapchain() };
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = swapChains;
-    presentInfo.pImageIndices = &m_imageIndex;
-
-    vkQueuePresentKHR(m_context->getPresentQueue(), &presentInfo);
-    m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void EditorApplication::cleanup() {
@@ -318,41 +436,8 @@ void EditorApplication::cleanup() {
         return;
     }
 
-    if (m_context) {
-        m_context->waitIdle();
-    }
-
-    if (m_context && m_context->getDevice() != VK_NULL_HANDLE) {
-        if (m_imguiDescriptorPool != VK_NULL_HANDLE) {
-            vkDestroyDescriptorPool(m_context->getDevice(), m_imguiDescriptorPool, nullptr);
-        }
-
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-            if (m_renderFinishedSemaphores.size() > i) {
-                vkDestroySemaphore(m_context->getDevice(), m_renderFinishedSemaphores[i], nullptr);
-            }
-            if (m_imageAvailableSemaphores.size() > i) {
-                vkDestroySemaphore(m_context->getDevice(), m_imageAvailableSemaphores[i], nullptr);
-            }
-            if (m_inFlightFences.size() > i) {
-                vkDestroyFence(m_context->getDevice(), m_inFlightFences[i], nullptr);
-            }
-        }
-    }
-
-    ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-
-    if (m_context) {
-        m_context->cleanup();
-    }
-
-    if (m_window) {
-        glfwDestroyWindow(m_window);
-        glfwTerminate();
-        m_window = nullptr;
-    }
-
+    cleanupViewportResources();
+    m_sceneRenderer.cleanup();
+    m_frameHost.cleanup();
     m_isCleanedUp = true;
 }

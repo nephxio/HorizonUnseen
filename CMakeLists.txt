@@ -14,13 +14,10 @@ find_package(Vulkan REQUIRED)
 # Add third-party dependencies
 add_subdirectory(external)
 
-# Source files
-set(SOURCES
-    src/main.cpp
-    src/Application.cpp
-    src/Renderer/VulkanRenderer.cpp
-    src/Renderer/VulkanContext.cpp
+# Shared gameplay library
+set(GAMEPLAY_SOURCES
     src/Game/GameScene.cpp
+    src/Game/GameSession.cpp
     src/Game/Player.cpp
     src/Game/Enemy.cpp
     src/Game/Spawner.cpp
@@ -35,11 +32,9 @@ set(SOURCES
     src/Debug/DebugConsole.cpp
 )
 
-set(HEADERS
-    src/Application.h
-    src/Renderer/VulkanRenderer.h
-    src/Renderer/VulkanContext.h
+set(GAMEPLAY_HEADERS
     src/Game/GameScene.h
+    src/Game/GameSession.h
     src/Game/Player.h
     src/Game/Enemy.h
     src/Game/Spawner.h
@@ -55,6 +50,56 @@ set(HEADERS
     src/Debug/DebugConsole.h
 )
 
+add_library(HorizonUnseenGameplay STATIC
+    ${GAMEPLAY_SOURCES}
+    ${GAMEPLAY_HEADERS}
+)
+
+target_include_directories(HorizonUnseenGameplay PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+# Shared rendering library
+set(RENDERING_SOURCES
+    src/Renderer/VulkanContext.cpp
+    src/Rendering/SceneRenderer.cpp
+    src/Rendering/VulkanFrameHost.cpp
+)
+
+set(RENDERING_HEADERS
+    src/Renderer/VulkanContext.h
+    src/Rendering/SceneRenderer.h
+    src/Rendering/VulkanFrameHost.h
+)
+
+add_library(HorizonUnseenRendering STATIC
+    ${RENDERING_SOURCES}
+    ${RENDERING_HEADERS}
+)
+
+target_include_directories(HorizonUnseenRendering PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${Vulkan_INCLUDE_DIRS}
+)
+
+target_link_libraries(HorizonUnseenRendering PUBLIC
+    Vulkan::Vulkan
+    glfw
+    imgui
+)
+
+# Source files
+set(SOURCES
+    src/main.cpp
+    src/Application.cpp
+    src/Renderer/VulkanRenderer.cpp
+)
+
+set(HEADERS
+    src/Application.h
+    src/Renderer/VulkanRenderer.h
+)
+
 # Create executable
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
@@ -62,7 +107,6 @@ add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 add_executable(HorizonUnseenEditor
     src/Editor/main.cpp
     src/Editor/EditorApplication.cpp
-    src/Renderer/VulkanContext.cpp
 )
 
 # Include directories
@@ -78,26 +122,44 @@ target_include_directories(HorizonUnseenEditor PRIVATE
 
 # Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    Vulkan::Vulkan
-    glfw
-    imgui
+    HorizonUnseenGameplay
+    HorizonUnseenRendering
 )
 
 target_link_libraries(HorizonUnseenEditor PRIVATE
-    Vulkan::Vulkan
-    glfw
-    imgui
+    HorizonUnseenGameplay
+    HorizonUnseenRendering
 )
 
 # Platform-specific settings
 if(WIN32)
+    target_compile_definitions(HorizonUnseenRendering PUBLIC
+        VK_USE_PLATFORM_WIN32_KHR
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN
+    )
+
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         VK_USE_PLATFORM_WIN32_KHR
         NOMINMAX
         WIN32_LEAN_AND_MEAN
     )
+
+    target_compile_definitions(HorizonUnseenEditor PRIVATE
+        VK_USE_PLATFORM_WIN32_KHR
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN
+    )
 elseif(UNIX)
+    target_compile_definitions(HorizonUnseenRendering PUBLIC
+        VK_USE_PLATFORM_XLIB_KHR
+    )
+
     target_compile_definitions(${PROJECT_NAME} PRIVATE
+        VK_USE_PLATFORM_XLIB_KHR
+    )
+
+    target_compile_definitions(HorizonUnseenEditor PRIVATE
         VK_USE_PLATFORM_XLIB_KHR
     )
 endif()

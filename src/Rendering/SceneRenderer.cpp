@@ -1,37 +1,28 @@
-#include "VulkanRenderer.h"
-#include "Debug/DebugConsole.h"
+#include "SceneRenderer.h"
+
 #include "Game/GameScene.h"
 #include "Renderer/VulkanContext.h"
 
 #include <cstring>
-#include <iostream>
 #include <stdexcept>
 #include <vector>
 
-VulkanRenderer::VulkanRenderer() : m_window(nullptr) {}
-
-VulkanRenderer::~VulkanRenderer() {
+SceneRenderer::~SceneRenderer() {
     cleanup();
 }
 
-void VulkanRenderer::init() {
-    std::cout << " - initFrameHost()" << std::endl;
-    m_frameHost.init({ "Horizon Unseen", WIDTH, HEIGHT, false });
-    m_window = m_frameHost.getWindow();
-    m_context = &m_frameHost.getContext();
+void SceneRenderer::init(VulkanContext& context) {
+    m_context = &context;
 
-    std::cout << " - createVertexBuffer()" << std::endl;
     createVertexBuffer();
-    std::cout << " - createEnemyVertexBuffer()" << std::endl;
     createEnemyVertexBuffer();
-    std::cout << " - createBulletVertexBuffer()" << std::endl;
     createBulletVertexBuffer();
-    std::cout << " - createEnemyBulletVertexBuffer()" << std::endl;
     createEnemyBulletVertexBuffer();
-    std::cout << " - Renderer init complete!" << std::endl;
+
+    m_isInitialized = true;
 }
 
-void VulkanRenderer::createVertexBuffer() {
+void SceneRenderer::createVertexBuffer() {
     std::vector<float> vertices = {
         -20.0f,  20.0f,  1.0f, 0.0f, 0.0f,
         -20.0f, -20.0f,  0.0f, 1.0f, 0.0f,
@@ -83,7 +74,7 @@ void VulkanRenderer::createVertexBuffer() {
     vkUnmapMemory(m_context->getDevice(), m_vertexBufferMemory);
 }
 
-void VulkanRenderer::createEnemyVertexBuffer() {
+void SceneRenderer::createEnemyVertexBuffer() {
     std::vector<float> vertices = {
         -15.0f, -15.0f,  1.0f, 0.0f, 0.0f,
          15.0f, -15.0f,  1.0f, 0.0f, 0.0f,
@@ -139,7 +130,7 @@ void VulkanRenderer::createEnemyVertexBuffer() {
     vkUnmapMemory(m_context->getDevice(), m_enemyVertexBufferMemory);
 }
 
-void VulkanRenderer::createBulletVertexBuffer() {
+void SceneRenderer::createBulletVertexBuffer() {
     std::vector<float> vertices = {
         -3.0f, -3.0f,  1.0f, 1.0f, 0.0f,
          3.0f, -3.0f,  1.0f, 1.0f, 0.0f,
@@ -195,7 +186,7 @@ void VulkanRenderer::createBulletVertexBuffer() {
     vkUnmapMemory(m_context->getDevice(), m_bulletVertexBufferMemory);
 }
 
-void VulkanRenderer::createEnemyBulletVertexBuffer() {
+void SceneRenderer::createEnemyBulletVertexBuffer() {
     std::vector<float> vertices = {
         -4.0f, -4.0f,  1.0f, 0.5f, 0.0f,
          4.0f, -4.0f,  1.0f, 0.5f, 0.0f,
@@ -251,11 +242,7 @@ void VulkanRenderer::createEnemyBulletVertexBuffer() {
     vkUnmapMemory(m_context->getDevice(), m_enemyBulletVertexBufferMemory);
 }
 
-void VulkanRenderer::recordScene(VkCommandBuffer commandBuffer) const {
-    if (!m_gameScene) {
-        return;
-    }
-
+void SceneRenderer::record(VkCommandBuffer commandBuffer, const GameScene& scene) const {
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_context->getPipeline());
 
     struct PushConstants {
@@ -267,8 +254,8 @@ void VulkanRenderer::recordScene(VkCommandBuffer commandBuffer) const {
 
     VkBuffer vertexBuffers[] = { m_vertexBuffer };
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    pushConstants.posX = m_gameScene->getPlayer().getPosition().x;
-    pushConstants.posY = m_gameScene->getPlayer().getPosition().y;
+    pushConstants.posX = scene.getPlayer().getPosition().x;
+    pushConstants.posY = scene.getPlayer().getPosition().y;
     pushConstants.scaleX = 1.0f;
     pushConstants.scaleY = 1.0f;
     vkCmdPushConstants(commandBuffer, m_context->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
@@ -276,7 +263,7 @@ void VulkanRenderer::recordScene(VkCommandBuffer commandBuffer) const {
 
     VkBuffer enemyVertexBuffers[] = { m_enemyVertexBuffer };
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, enemyVertexBuffers, offsets);
-    for (const auto& enemy : m_gameScene->getEnemies()) {
+    for (const auto& enemy : scene.getEnemies()) {
         pushConstants.posX = enemy->getPosition().x;
         pushConstants.posY = enemy->getPosition().y;
         pushConstants.scaleX = 1.0f;
@@ -287,7 +274,7 @@ void VulkanRenderer::recordScene(VkCommandBuffer commandBuffer) const {
 
     VkBuffer bulletVertexBuffers[] = { m_bulletVertexBuffer };
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, bulletVertexBuffers, offsets);
-    for (const auto& bullet : m_gameScene->getBullets()) {
+    for (const auto& bullet : scene.getBullets()) {
         pushConstants.posX = bullet->getPosition().x;
         pushConstants.posY = bullet->getPosition().y;
         pushConstants.scaleX = 1.0f;
@@ -298,7 +285,7 @@ void VulkanRenderer::recordScene(VkCommandBuffer commandBuffer) const {
 
     VkBuffer enemyBulletVertexBuffers[] = { m_enemyBulletVertexBuffer };
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, enemyBulletVertexBuffers, offsets);
-    auto enemyBullets = m_gameScene->getEnemyBulletPool().getActiveBullets();
+    auto enemyBullets = scene.getEnemyBulletPool().getActiveBullets();
     for (const auto* enemyBullet : enemyBullets) {
         pushConstants.posX = enemyBullet->getPosition().x;
         pushConstants.posY = enemyBullet->getPosition().y;
@@ -309,126 +296,45 @@ void VulkanRenderer::recordScene(VkCommandBuffer commandBuffer) const {
     }
 }
 
-void VulkanRenderer::renderFrame() {
-    m_frameHost.renderFrame(*this);
-}
-
-VkClearValue VulkanRenderer::getClearColor() const {
-    return {{{0.0f, 0.0f, 0.2f, 1.0f}}};
-}
-
-void VulkanRenderer::recordScene(VkCommandBuffer commandBuffer) {
-    if (!m_gameScene) {
+void SceneRenderer::cleanup() {
+    if (!m_context || !m_isInitialized) {
         return;
     }
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_context->getPipeline());
-
-    struct PushConstants {
-        float posX, posY;
-        float scaleX, scaleY;
-    } pushConstants;
-
-    VkDeviceSize offsets[] = { 0 };
-
-    VkBuffer vertexBuffers[] = { m_vertexBuffer };
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    pushConstants.posX = m_gameScene->getPlayer().getPosition().x;
-    pushConstants.posY = m_gameScene->getPlayer().getPosition().y;
-    pushConstants.scaleX = 1.0f;
-    pushConstants.scaleY = 1.0f;
-    vkCmdPushConstants(commandBuffer, m_context->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
-
-    VkBuffer enemyVertexBuffers[] = { m_enemyVertexBuffer };
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, enemyVertexBuffers, offsets);
-    for (const auto& enemy : m_gameScene->getEnemies()) {
-        pushConstants.posX = enemy->getPosition().x;
-        pushConstants.posY = enemy->getPosition().y;
-        pushConstants.scaleX = 1.0f;
-        pushConstants.scaleY = 1.0f;
-        vkCmdPushConstants(commandBuffer, m_context->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
-        vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+    VkDevice device = m_context->getDevice();
+    if (m_vertexBuffer != VK_NULL_HANDLE) {
+        vkDestroyBuffer(device, m_vertexBuffer, nullptr);
+    }
+    if (m_vertexBufferMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(device, m_vertexBufferMemory, nullptr);
+    }
+    if (m_enemyVertexBuffer != VK_NULL_HANDLE) {
+        vkDestroyBuffer(device, m_enemyVertexBuffer, nullptr);
+    }
+    if (m_enemyVertexBufferMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(device, m_enemyVertexBufferMemory, nullptr);
+    }
+    if (m_bulletVertexBuffer != VK_NULL_HANDLE) {
+        vkDestroyBuffer(device, m_bulletVertexBuffer, nullptr);
+    }
+    if (m_bulletVertexBufferMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(device, m_bulletVertexBufferMemory, nullptr);
+    }
+    if (m_enemyBulletVertexBuffer != VK_NULL_HANDLE) {
+        vkDestroyBuffer(device, m_enemyBulletVertexBuffer, nullptr);
+    }
+    if (m_enemyBulletVertexBufferMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(device, m_enemyBulletVertexBufferMemory, nullptr);
     }
 
-    VkBuffer bulletVertexBuffers[] = { m_bulletVertexBuffer };
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, bulletVertexBuffers, offsets);
-    for (const auto& bullet : m_gameScene->getBullets()) {
-        pushConstants.posX = bullet->getPosition().x;
-        pushConstants.posY = bullet->getPosition().y;
-        pushConstants.scaleX = 1.0f;
-        pushConstants.scaleY = 1.0f;
-        vkCmdPushConstants(commandBuffer, m_context->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
-        vkCmdDraw(commandBuffer, 6, 1, 0, 0);
-    }
-
-    VkBuffer enemyBulletVertexBuffers[] = { m_enemyBulletVertexBuffer };
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, enemyBulletVertexBuffers, offsets);
-    auto enemyBullets = m_gameScene->getEnemyBulletPool().getActiveBullets();
-    for (const auto* enemyBullet : enemyBullets) {
-        pushConstants.posX = enemyBullet->getPosition().x;
-        pushConstants.posY = enemyBullet->getPosition().y;
-        pushConstants.scaleX = 1.0f;
-        pushConstants.scaleY = 1.0f;
-        vkCmdPushConstants(commandBuffer, m_context->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
-        vkCmdDraw(commandBuffer, 6, 1, 0, 0);
-    }
-}
-
-void VulkanRenderer::renderUi() {
-    DebugConsole::getInstance().renderHUD(m_gameScene);
-    DebugConsole::getInstance().render();
-}
-
-bool VulkanRenderer::shouldClose() const {
-    return m_frameHost.shouldClose();
-}
-
-void VulkanRenderer::waitIdle() {
-    m_frameHost.waitIdle();
-}
-
-void VulkanRenderer::cleanup() {
-    if (m_isCleanedUp) {
-        return;
-    }
-
-    if (m_context) {
-        m_context->waitIdle();
-    }
-
-    if (m_context && m_context->getDevice() != VK_NULL_HANDLE) {
-        if (m_vertexBuffer != VK_NULL_HANDLE) {
-            vkDestroyBuffer(m_context->getDevice(), m_vertexBuffer, nullptr);
-        }
-        if (m_vertexBufferMemory != VK_NULL_HANDLE) {
-            vkFreeMemory(m_context->getDevice(), m_vertexBufferMemory, nullptr);
-        }
-
-        if (m_enemyVertexBuffer != VK_NULL_HANDLE) {
-            vkDestroyBuffer(m_context->getDevice(), m_enemyVertexBuffer, nullptr);
-        }
-        if (m_enemyVertexBufferMemory != VK_NULL_HANDLE) {
-            vkFreeMemory(m_context->getDevice(), m_enemyVertexBufferMemory, nullptr);
-        }
-
-        if (m_bulletVertexBuffer != VK_NULL_HANDLE) {
-            vkDestroyBuffer(m_context->getDevice(), m_bulletVertexBuffer, nullptr);
-        }
-        if (m_bulletVertexBufferMemory != VK_NULL_HANDLE) {
-            vkFreeMemory(m_context->getDevice(), m_bulletVertexBufferMemory, nullptr);
-        }
-
-        if (m_enemyBulletVertexBuffer != VK_NULL_HANDLE) {
-            vkDestroyBuffer(m_context->getDevice(), m_enemyBulletVertexBuffer, nullptr);
-        }
-        if (m_enemyBulletVertexBufferMemory != VK_NULL_HANDLE) {
-            vkFreeMemory(m_context->getDevice(), m_enemyBulletVertexBufferMemory, nullptr);
-        }
-    }
-
-    m_frameHost.cleanup();
-    m_window = nullptr;
+    m_vertexBuffer = VK_NULL_HANDLE;
+    m_vertexBufferMemory = VK_NULL_HANDLE;
+    m_enemyVertexBuffer = VK_NULL_HANDLE;
+    m_enemyVertexBufferMemory = VK_NULL_HANDLE;
+    m_bulletVertexBuffer = VK_NULL_HANDLE;
+    m_bulletVertexBufferMemory = VK_NULL_HANDLE;
+    m_enemyBulletVertexBuffer = VK_NULL_HANDLE;
+    m_enemyBulletVertexBufferMemory = VK_NULL_HANDLE;
+    m_isInitialized = false;
     m_context = nullptr;
-    m_isCleanedUp = true;
 }
