@@ -31,6 +31,7 @@ set(SOURCES
     src/Systems/InputSystem.cpp
     src/Systems/CollisionSystem.cpp
     src/Config/ConfigManager.cpp
+    src/Game/HealthSystem.cpp
     src/Debug/DebugConsole.cpp
 )
 
@@ -50,11 +51,19 @@ set(HEADERS
     src/Systems/CollisionSystem.h
     src/Config/GameConfig.h
     src/Config/ConfigManager.h
+    src/Game/HealthSystem.h
     src/Debug/DebugConsole.h
 )
 
 # Create executable
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
+
+# Editor executable
+add_executable(HorizonUnseenEditor
+    src/Editor/main.cpp
+    src/Editor/EditorApplication.cpp
+    src/Renderer/VulkanContext.cpp
+)
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -62,8 +71,19 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${Vulkan_INCLUDE_DIRS}
 )
 
+target_include_directories(HorizonUnseenEditor PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${Vulkan_INCLUDE_DIRS}
+)
+
 # Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    Vulkan::Vulkan
+    glfw
+    imgui
+)
+
+target_link_libraries(HorizonUnseenEditor PRIVATE
     Vulkan::Vulkan
     glfw
     imgui

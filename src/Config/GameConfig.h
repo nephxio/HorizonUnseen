@@ -36,6 +36,13 @@ public:
     float screenWidth = 1280.0f;
     float screenHeight = 720.0f;
 
+    // Health Cell System
+    float healthCellMaxHealth = 100.0f;
+    float healthCellMaxEnergy = 100.0f;
+    float healthCellEnergyGainRate = 1.0f;
+    float healthCellDecayRate = 10.0f;
+    float healthCellDamageThresholds[5] = { 25.0f, 25.0f, 25.0f, 25.0f, 25.0f };
+
 private:
     GameConfig() = default;
     ~GameConfig() = default;

@@ -5,6 +5,7 @@
 #include "Spawner.h"
 #include "Bullet.h"
 #include "BulletPool.h"
+#include "HealthSystem.h"
 #include <memory>
 #include <vector>
 
@@ -21,6 +22,7 @@ public:
     const std::vector<std::unique_ptr<Bullet>>& getBullets() const { return m_bullets; }
     BulletPool& getEnemyBulletPool() { return m_enemyBulletPool; }
     const BulletPool& getEnemyBulletPool() const { return m_enemyBulletPool; }
+    const HealthSystem& getPlayerHealthSystem() const { return m_player.getHealthSystem(); }
 
     int getCollisionCount() const { return m_collisionCount; }
 

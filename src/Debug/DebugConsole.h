@@ -4,6 +4,9 @@
 #include <vector>
 #include <functional>
 
+class GameScene;
+class HealthSystem;
+
 enum class DebugWindow {
     None,
     PlayerStats,

@@ -43,6 +43,18 @@ bool ConfigManager::saveConfig(const GameConfig& config, const std::string& file
     // Write spawner settings
     file.write(reinterpret_cast<const char*>(&config.spawnerBaseInterval), sizeof(config.spawnerBaseInterval));
     file.write(reinterpret_cast<const char*>(&config.spawnerIntervalIncrement), sizeof(config.spawnerIntervalIncrement));
+    file.write(reinterpret_cast<const char*>(&config.healthCellMaxHealth), sizeof(config.healthCellMaxHealth));
+    file.write(reinterpret_cast<const char*>(&config.healthCellMaxEnergy), sizeof(config.healthCellMaxEnergy));
+    file.write(reinterpret_cast<const char*>(&config.healthCellEnergyGainRate), sizeof(config.healthCellEnergyGainRate));
+    file.write(reinterpret_cast<const char*>(&config.healthCellDecayRate), sizeof(config.healthCellDecayRate));
+    file.write(reinterpret_cast<const char*>(config.healthCellDamageThresholds), sizeof(config.healthCellDamageThresholds));
+
+    // Write health cell settings
+    file.write(reinterpret_cast<const char*>(&config.healthCellMaxHealth), sizeof(config.healthCellMaxHealth));
+    file.write(reinterpret_cast<const char*>(&config.healthCellMaxEnergy), sizeof(config.healthCellMaxEnergy));
+    file.write(reinterpret_cast<const char*>(&config.healthCellEnergyGainRate), sizeof(config.healthCellEnergyGainRate));
+    file.write(reinterpret_cast<const char*>(&config.healthCellDecayRate), sizeof(config.healthCellDecayRate));
+    file.write(reinterpret_cast<const char*>(config.healthCellDamageThresholds), sizeof(config.healthCellDamageThresholds));
 
     file.close();
     
@@ -107,6 +119,18 @@ bool ConfigManager::loadConfig(GameConfig& config, const std::string& filename) 
     // Read spawner settings
     file.read(reinterpret_cast<char*>(&config.spawnerBaseInterval), sizeof(config.spawnerBaseInterval));
     file.read(reinterpret_cast<char*>(&config.spawnerIntervalIncrement), sizeof(config.spawnerIntervalIncrement));
+    file.read(reinterpret_cast<char*>(&config.healthCellMaxHealth), sizeof(config.healthCellMaxHealth));
+    file.read(reinterpret_cast<char*>(&config.healthCellMaxEnergy), sizeof(config.healthCellMaxEnergy));
+    file.read(reinterpret_cast<char*>(&config.healthCellEnergyGainRate), sizeof(config.healthCellEnergyGainRate));
+    file.read(reinterpret_cast<char*>(&config.healthCellDecayRate), sizeof(config.healthCellDecayRate));
+    file.read(reinterpret_cast<char*>(config.healthCellDamageThresholds), sizeof(config.healthCellDamageThresholds));
+
+    // Read health cell settings
+    file.read(reinterpret_cast<char*>(&config.healthCellMaxHealth), sizeof(config.healthCellMaxHealth));
+    file.read(reinterpret_cast<char*>(&config.healthCellMaxEnergy), sizeof(config.healthCellMaxEnergy));
+    file.read(reinterpret_cast<char*>(&config.healthCellEnergyGainRate), sizeof(config.healthCellEnergyGainRate));
+    file.read(reinterpret_cast<char*>(&config.healthCellDecayRate), sizeof(config.healthCellDecayRate));
+    file.read(reinterpret_cast<char*>(config.healthCellDamageThresholds), sizeof(config.healthCellDamageThresholds));
 
     file.close();
     

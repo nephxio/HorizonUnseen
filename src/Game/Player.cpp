@@ -4,9 +4,12 @@
 #include <cmath>
 
 Player::Player() : Entity(100.0f, 360.0f, GameConfig::getInstance().playerHitPoints, 0.0f) {
+    m_healthSystem.syncFromConfig();
 }
 
 void Player::update(float deltaTime) {
+    updateHealthSystem(deltaTime);
+
     // Update shoot cooldown
     if (m_shootCooldown > 0.0f) {
         m_shootCooldown -= deltaTime;
@@ -71,6 +74,17 @@ CollisionBox Player::getCollisionBox() const {
 
 void Player::onCollision(ICollidable* other) {
     if (other && other->getDamage() > 0) {
-        takeDamage(other->getDamage());
+        queueDamage(other->getDamage());
     }
+}
+
+void Player::queueDamage(float damage) {
+    m_healthSystem.queueDamage(damage);
+}
+
+void Player::updateHealthSystem(float deltaTime) {
+    m_healthSystem.update(deltaTime);
+    m_isAlive = m_healthSystem.isAlive();
+    m_health = m_healthSystem.getTotalHealth();
+    m_maxHealth = m_healthSystem.getTotalMaxHealth();
 }

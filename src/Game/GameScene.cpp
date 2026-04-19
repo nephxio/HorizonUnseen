@@ -121,7 +121,7 @@ void GameScene::removeDeadEnemies() {
 }
 
 void GameScene::checkCollisions() {
-    if (!m_player.isAlive()) return;
+    if (!m_player.isAlive()) return; // Check if player is alive
 
     // Check player vs enemies
     if (!m_enemies.empty()) {
@@ -138,7 +138,7 @@ void GameScene::checkCollisions() {
                         m_collisionCount++;
                         m_lastCollisionTime = 0.0f;  // Reset cooldown
 
-                        m_player.onCollision(enemy.get());
+                        m_player.onCollision(enemy.get()); // Route through player's health-cell damage queue
                         enemy->onCollision(&m_player);
                     }
 
@@ -183,7 +183,7 @@ void GameScene::checkCollisions() {
                         m_collisionCount++;
                         m_lastCollisionTime = 0.0f;
 
-                        m_player.onCollision(enemyBullet);
+                        m_player.onCollision(enemyBullet); // Route through player's health-cell damage queue
                         enemyBullet->onCollision(&m_player);
                     }
                     break;

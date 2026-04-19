@@ -2,6 +2,7 @@
 #include "Config/GameConfig.h"
 #include "Config/ConfigManager.h"
 #include "Game/GameScene.h"
+#include "Game/HealthSystem.h"
 #include <imgui.h>
 #include <sstream>
 #include <algorithm>
@@ -200,6 +201,19 @@ void DebugConsole::renderPlayerStatsWindow() {
         ImGui::Text("Note: Health changes apply to newly spawned player");
 
         ImGui::Separator();
+        ImGui::Text("Health Cell Configuration");
+
+        ImGui::SliderFloat("Cell Max Health", &config.healthCellMaxHealth, 10.0f, 500.0f, "%.1f");
+        ImGui::SliderFloat("Cell Max Energy", &config.healthCellMaxEnergy, 10.0f, 500.0f, "%.1f");
+        ImGui::SliderFloat("Energy Gain Rate", &config.healthCellEnergyGainRate, 0.1f, 5.0f, "%.2f");
+        ImGui::SliderFloat("Decay Rate", &config.healthCellDecayRate, 1.0f, 50.0f, "%.1f");
+
+        for (int i = 0; i < 5; ++i) {
+            std::string label = "Threshold Cell " + std::to_string(i + 1);
+            ImGui::SliderFloat(label.c_str(), &config.healthCellDamageThresholds[i], 0.0f, 200.0f, "%.1f dmg/s");
+        }
+
+        ImGui::Separator();
 
         // Reset buttons
         if (ImGui::Button("Reset to Default")) {
@@ -209,6 +223,13 @@ void DebugConsole::renderPlayerStatsWindow() {
             config.playerFireRate = 1.0f;
             config.playerBulletDamage = 10.0f;
             config.playerBulletSpeed = 500.0f;
+            config.healthCellMaxHealth = 100.0f;
+            config.healthCellMaxEnergy = 100.0f;
+            config.healthCellEnergyGainRate = 1.0f;
+            config.healthCellDecayRate = 10.0f;
+            for (int i = 0; i < 5; ++i) {
+                config.healthCellDamageThresholds[i] = 25.0f;
+            }
         }
 
         ImGui::SameLine();
@@ -356,6 +377,7 @@ void DebugConsole::renderSpawnerSettingsWindow() {
         auto& config = GameConfig::getInstance();
 
         ImGui::Text("Spawner Configuration");
+    ImGui::Text("Spawner Configuration");
         ImGui::Separator();
 
         ImGui::SliderFloat("Base Interval", &config.spawnerBaseInterval, 0.5f, 10.0f, "%.1f seconds");

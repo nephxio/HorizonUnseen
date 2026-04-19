@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Entity.h"
+#include "HealthSystem.h"
 #include "Systems/CollisionSystem.h"
 
 class InputSystem;
@@ -16,12 +17,17 @@ public:
     void shoot();
     float getShootCooldown() const { return m_shootCooldown; }
 
+    void queueDamage(float damage);
+    void updateHealthSystem(float deltaTime);
+    const HealthSystem& getHealthSystem() const { return m_healthSystem; }
+
     // ICollidable interface
     CollisionBox getCollisionBox() const override;
     void onCollision(ICollidable* other) override;
-    float getDamage() const override { return Entity::getDamage(); }
+    float getDamage() const override { return 0.0f; }
     bool isAlive() const override { return Entity::isAlive(); }
 
 private:
     float m_shootCooldown = 0.0f;
+    HealthSystem m_healthSystem;
 };
