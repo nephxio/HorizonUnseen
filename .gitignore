@@ -1,7 +1,12 @@
 # Build directories
 build/
+build-*/
 out/
 cmake-build-*/
+
+# Runtime output
+logs/
+saves/
 
 # Visual Studio
 .vs/

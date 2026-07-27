@@ -48,8 +48,17 @@ public:
     VkRenderPass getRenderPass() const { return m_renderPass; }
     const std::vector<VkFramebuffer>& getFramebuffers() const { return m_framebuffers; }
     VkCommandPool getCommandPool() const { return m_commandPool; }
+    // Sprite pipelines. Both share m_pipelineLayout and differ only in blend
+    // state, so SpriteBatch can switch between them without rebinding
+    // descriptors or vertex buffers.
     VkPipeline getPipeline() const { return m_pipeline; }
+    VkPipeline getSpriteAlphaPipeline() const { return m_pipeline; }
+    VkPipeline getSpriteAdditivePipeline() const { return m_pipelineAdditive; }
     VkPipelineLayout getPipelineLayout() const { return m_pipelineLayout; }
+    VkDescriptorSetLayout getSpriteDescriptorSetLayout() const { return m_spriteDescriptorSetLayout; }
+
+    // Byte size of the vertex-stage push constant block (vec2 viewport + pad).
+    static constexpr uint32_t kSpritePushConstantSize = sizeof(float) * 4;
 
 private:
     void createInstance();
@@ -112,7 +121,9 @@ private:
     std::vector<VkFramebuffer> m_framebuffers;
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
 
-    VkPipeline m_pipeline = VK_NULL_HANDLE;
+    VkDescriptorSetLayout m_spriteDescriptorSetLayout = VK_NULL_HANDLE;
+    VkPipeline m_pipeline = VK_NULL_HANDLE;          // alpha blended
+    VkPipeline m_pipelineAdditive = VK_NULL_HANDLE;  // additive blended
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
 
     const std::vector<const char*> validationLayers = {

@@ -4,9 +4,10 @@
 #include <imgui_impl_vulkan.h>
 
 #include <algorithm>
-#include <cmath>
 #include <iostream>
 #include <stdexcept>
+
+#include "Game/Entity.h"
 
 namespace {
 uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties) {
@@ -255,7 +256,7 @@ void EditorApplication::updateViewportTexture() {
     renderPassInfo.renderArea.offset = { 0, 0 };
     renderPassInfo.renderArea.extent = m_viewportExtent;
     renderPassInfo.clearValueCount = 1;
-    renderPassInfo.pClearValues = &clearValue;
+    renderPassInfo.pClearValues = &clearColor;
 
     vkCmdBeginRenderPass(m_viewportCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -283,12 +284,15 @@ void EditorApplication::updateViewportTexture() {
 }
 
 void EditorApplication::renderUi() {
+    auto& scene = m_gameSession->getScene();
+    validateSelection(scene);
+
     updateViewportTexture();
 
     renderDockspace();
 
-    if (m_showHierarchy) renderHierarchyPanel();
-    if (m_showInspector) renderInspectorPanel();
+    if (m_showHierarchy) renderHierarchyPanel(scene);
+    if (m_showInspector) renderInspectorPanel(scene);
     if (m_showContentBrowser) renderContentBrowserPanel();
     if (m_showViewport) renderViewportPanel();
 }
@@ -329,21 +333,149 @@ void EditorApplication::renderDockspace() {
     ImGui::End();
 }
 
-void EditorApplication::renderHierarchyPanel() {
+void EditorApplication::renderHierarchyPanel(GameScene& scene) {
     ImGui::Begin("Scene Hierarchy", &m_showHierarchy);
-    ImGui::Text("Empty stage 2 shell");
+    ImGui::Text("Runtime scene objects");
     ImGui::Separator();
-    ImGui::Selectable("Root Scene", m_selectedItem == 0);
-    if (ImGui::Selectable("Player", m_selectedItem == 1)) m_selectedItem = 1;
-    if (ImGui::Selectable("Enemies", m_selectedItem == 2)) m_selectedItem = 2;
+
+    auto renderBadge = [](const char* label, const ImVec4& color) {
+        ImGui::PushStyleColor(ImGuiCol_Text, color);
+        ImGui::TextUnformatted(label);
+        ImGui::PopStyleColor();
+    };
+
+    if (ImGui::TreeNodeEx("Player (1)", ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::SameLine();
+        renderBadge(scene.getPlayer().isAlive() ? "[Alive]" : "[Down]", scene.getPlayer().isAlive() ? ImVec4(0.35f, 0.85f, 0.45f, 1.0f) : ImVec4(0.90f, 0.35f, 0.35f, 1.0f));
+
+        if (ImGui::Selectable("Player", isSelected(&scene.getPlayer()), ImGuiSelectableFlags_SpanAllColumns)) {
+            selectEntity(SelectionKind::Player, &scene.getPlayer(), ImGui::GetIO().KeyCtrl);
+        }
+        ImGui::TreePop();
+    }
+
+    auto& enemies = scene.getEnemies();
+    if (ImGui::TreeNodeEx("Enemies", ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_DefaultOpen, "Enemies (%d)", static_cast<int>(enemies.size()))) {
+        ImGui::SameLine();
+        renderBadge(enemies.empty() ? "[Empty]" : "[Active]", enemies.empty() ? ImVec4(0.70f, 0.70f, 0.70f, 1.0f) : ImVec4(0.30f, 0.65f, 0.95f, 1.0f));
+
+        for (std::size_t i = 0; i < enemies.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+            const bool selected = isSelected(enemies[i].get());
+            if (ImGui::Selectable("Enemy", selected, ImGuiSelectableFlags_SpanAllColumns)) {
+                selectEntity(SelectionKind::Enemy, enemies[i].get(), ImGui::GetIO().KeyCtrl);
+            }
+            ImGui::PopID();
+        }
+        ImGui::TreePop();
+    }
+
+    auto& bullets = scene.getBullets();
+    if (ImGui::TreeNodeEx("Bullets", ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_DefaultOpen, "Bullets (%d)", static_cast<int>(bullets.size()))) {
+        ImGui::SameLine();
+        renderBadge(bullets.empty() ? "[Empty]" : "[Active]", bullets.empty() ? ImVec4(0.70f, 0.70f, 0.70f, 1.0f) : ImVec4(0.95f, 0.80f, 0.25f, 1.0f));
+
+        for (std::size_t i = 0; i < bullets.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+            const bool selected = isSelected(bullets[i].get());
+            if (ImGui::Selectable("Bullet", selected, ImGuiSelectableFlags_SpanAllColumns)) {
+                selectEntity(SelectionKind::Bullet, bullets[i].get(), ImGui::GetIO().KeyCtrl);
+            }
+            ImGui::PopID();
+        }
+        ImGui::TreePop();
+    }
+
+    auto activeBullets = scene.getEnemyBulletPool().getActiveBullets();
+    if (ImGui::TreeNodeEx("EnemyBullets", ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_DefaultOpen, "Enemy Bullets (%d)", static_cast<int>(activeBullets.size()))) {
+        ImGui::SameLine();
+        renderBadge(activeBullets.empty() ? "[Empty]" : "[Active]", activeBullets.empty() ? ImVec4(0.70f, 0.70f, 0.70f, 1.0f) : ImVec4(0.95f, 0.55f, 0.20f, 1.0f));
+
+        for (std::size_t i = 0; i < activeBullets.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+            const bool selected = isSelected(activeBullets[i]);
+            if (ImGui::Selectable("Enemy Bullet", selected, ImGuiSelectableFlags_SpanAllColumns)) {
+                selectEntity(SelectionKind::EnemyBullet, activeBullets[i], ImGui::GetIO().KeyCtrl);
+            }
+            ImGui::PopID();
+        }
+        ImGui::TreePop();
+    }
+
     ImGui::End();
 }
 
-void EditorApplication::renderInspectorPanel() {
+void EditorApplication::renderInspectorPanel(GameScene& scene) {
     ImGui::Begin("Inspector", &m_showInspector);
-    ImGui::Text("Selected Item: %d", m_selectedItem);
-    ImGui::Separator();
-    ImGui::Text("No editable properties yet.");
+
+    if (m_selection.empty()) {
+        ImGui::TextUnformatted("Select an entity in the hierarchy.");
+        ImGui::End();
+        return;
+    }
+
+    if (m_selection.size() == 1) {
+        auto& selected = m_selection.front();
+        renderEntityInspector(*selected.entity, selected.kind);
+    } else {
+        ImGui::Text("Multiple selection (%zu)", m_selection.size());
+        ImGui::Separator();
+
+        if (ImGui::TreeNodeEx("Shared Properties", ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_DefaultOpen)) {
+            Entity* first = m_selection.front().entity;
+
+            Vector2 position = first->getPosition();
+            if (ImGui::InputFloat2("Position", &position.x)) {
+                for (auto& selected : m_selection) {
+                    selected.entity->setPosition(position);
+                }
+            }
+
+            Vector2 velocity = first->getVelocity();
+            if (ImGui::InputFloat2("Velocity", &velocity.x)) {
+                for (auto& selected : m_selection) {
+                    selected.entity->setVelocity(velocity);
+                }
+            }
+
+            float health = first->getHealth();
+            if (ImGui::DragFloat("Health", &health, 1.0f, 0.0f, 100000.0f)) {
+                for (auto& selected : m_selection) {
+                    selected.entity->setHealth(health);
+                }
+            }
+
+            float maxHealth = first->getMaxHealth();
+            if (ImGui::DragFloat("Max Health", &maxHealth, 1.0f, 0.0f, 100000.0f)) {
+                for (auto& selected : m_selection) {
+                    selected.entity->setMaxHealth(maxHealth);
+                }
+            }
+
+            float damage = first->getDamage();
+            if (ImGui::DragFloat("Damage", &damage, 0.5f, 0.0f, 100000.0f)) {
+                for (auto& selected : m_selection) {
+                    selected.entity->setDamage(damage);
+                }
+            }
+
+            ImGui::Text("Selected Entities: %zu", m_selection.size());
+            ImGui::TreePop();
+        }
+
+        ImGui::Separator();
+
+        for (std::size_t i = 0; i < m_selection.size(); ++i) {
+            auto& selected = m_selection[i];
+            ImGui::PushID(static_cast<int>(i));
+            if (ImGui::TreeNodeEx(getSelectionLabel(selected.kind), ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_DefaultOpen)) {
+                renderEntityInspector(*selected.entity, selected.kind);
+                ImGui::TreePop();
+            }
+            ImGui::PopID();
+        }
+    }
+
     ImGui::End();
 }
 
@@ -356,6 +488,162 @@ void EditorApplication::renderContentBrowserPanel() {
     ImGui::BulletText("Audio");
     ImGui::BulletText("Scripts");
     ImGui::End();
+}
+
+void EditorApplication::selectEntity(SelectionKind kind, Entity* entity, bool additive) {
+    if (!additive) {
+        m_selection.clear();
+    }
+
+    if (!entity) {
+        return;
+    }
+
+    auto existing = std::find_if(m_selection.begin(), m_selection.end(), [entity](const SceneSelection& selection) {
+        return selection.entity == entity;
+    });
+
+    if (existing != m_selection.end()) {
+        if (additive) {
+            m_selection.erase(existing);
+        }
+        return;
+    }
+
+    m_selection.push_back(SceneSelection{ kind, entity });
+}
+
+void EditorApplication::clearSelection() {
+    m_selection.clear();
+}
+
+bool EditorApplication::isSelected(const Entity* entity) const {
+    return std::any_of(m_selection.begin(), m_selection.end(), [entity](const SceneSelection& selection) {
+        return selection.entity == entity;
+    });
+}
+
+const char* EditorApplication::getSelectionLabel(SelectionKind kind) const {
+    switch (kind) {
+    case SelectionKind::Player: return "Player";
+    case SelectionKind::Enemy: return "Enemy";
+    case SelectionKind::Bullet: return "Bullet";
+    case SelectionKind::EnemyBullet: return "Enemy Bullet";
+    default: return "Entity";
+    }
+}
+
+void EditorApplication::renderEntityInspector(Entity& entity, SelectionKind kind) {
+    ImGui::Text("Entity: %p", static_cast<void*>(&entity));
+    ImGui::Separator();
+
+    Vector2 position = entity.getPosition();
+    if (ImGui::InputFloat2("Position", &position.x)) {
+        entity.setPosition(position);
+    }
+
+    Vector2 velocity = entity.getVelocity();
+    if (ImGui::InputFloat2("Velocity", &velocity.x)) {
+        entity.setVelocity(velocity);
+    }
+
+    float health = entity.getHealth();
+    if (ImGui::DragFloat("Health", &health, 1.0f, 0.0f, 100000.0f)) {
+        entity.setHealth(health);
+    }
+
+    float maxHealth = entity.getMaxHealth();
+    if (ImGui::DragFloat("Max Health", &maxHealth, 1.0f, 0.0f, 100000.0f)) {
+        entity.setMaxHealth(maxHealth);
+    }
+
+    float damage = entity.getDamage();
+    if (ImGui::DragFloat("Damage", &damage, 0.5f, 0.0f, 100000.0f)) {
+        entity.setDamage(damage);
+    }
+
+    ImGui::Text("Alive: %s", entity.isAlive() ? "Yes" : "No");
+
+    if (kind == SelectionKind::Player) {
+        auto& player = static_cast<Player&>(entity);
+        ImGui::Separator();
+        ImGui::TextUnformatted("Player Details");
+        ImGui::Text("Shoot Cooldown: %.2f", player.getShootCooldown());
+
+        HealthSystem& healthSystem = player.getHealthSystem();
+        if (ImGui::TreeNode("Health System")) {
+            ImGui::Text("Alive Cells: %zu / %zu", healthSystem.getAliveCellCount(), HealthSystem::CellCount);
+            ImGui::Text("Total Health: %.1f / %.1f", healthSystem.getTotalHealth(), healthSystem.getTotalMaxHealth());
+            ImGui::Text("Total Energy: %.1f / %.1f", healthSystem.getTotalEnergy(), healthSystem.getTotalMaxEnergy());
+
+            auto& cells = healthSystem.getCells();
+            for (std::size_t i = 0; i < cells.size(); ++i) {
+                ImGui::PushID(static_cast<int>(i));
+                if (ImGui::TreeNode("Cell", "Cell %zu", i)) {
+                    auto& cell = cells[i];
+                    ImGui::DragFloat("Current Health", &cell.currentHealth, 1.0f, 0.0f, cell.maxHealth);
+                    ImGui::DragFloat("Max Health", &cell.maxHealth, 1.0f, 0.0f, 100000.0f);
+                    ImGui::DragFloat("Current Energy", &cell.currentEnergy, 1.0f, 0.0f, cell.maxEnergy);
+                    ImGui::DragFloat("Max Energy", &cell.maxEnergy, 1.0f, 0.0f, 100000.0f);
+                    ImGui::DragFloat("Damage Threshold", &cell.damageThreshold, 0.5f, 0.0f, 100000.0f);
+                    ImGui::Checkbox("Broken", &cell.broken);
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+
+            ImGui::TreePop();
+        }
+    } else if (kind == SelectionKind::Enemy) {
+        auto& enemy = static_cast<Enemy&>(entity);
+        ImGui::Separator();
+        ImGui::TextUnformatted("Enemy Details");
+        ImGui::Text("State: %s", enemy.getState() == EnemyState::MovingLeft ? "MovingLeft" : "Diving");
+        ImGui::Text("Shoot Cooldown: %.2f", enemy.getShootCooldown());
+        ImGui::Text("Off Screen: %s", enemy.isOffScreen() ? "Yes" : "No");
+    } else if (kind == SelectionKind::Bullet) {
+        ImGui::Separator();
+        ImGui::TextUnformatted("Bullet Details");
+        ImGui::Text("Off Screen: %s", static_cast<Bullet&>(entity).isOffScreen() ? "Yes" : "No");
+    } else if (kind == SelectionKind::EnemyBullet) {
+        auto& bullet = static_cast<EnemyBullet&>(entity);
+        ImGui::Separator();
+        ImGui::TextUnformatted("Enemy Bullet Details");
+        ImGui::Text("Active: %s", bullet.isActive() ? "Yes" : "No");
+        ImGui::Text("Off Screen: %s", bullet.isOffScreen() ? "Yes" : "No");
+    }
+}
+
+void EditorApplication::validateSelection(GameScene& scene) {
+    if (m_selection.empty()) {
+        return;
+    }
+
+    auto isEnemyBulletAlive = [&scene](const Entity* entity) {
+        auto activeBullets = scene.getEnemyBulletPool().getActiveBullets();
+        return std::any_of(activeBullets.begin(), activeBullets.end(), [entity](const EnemyBullet* bullet) {
+            return bullet == entity;
+        });
+    };
+
+    m_selection.erase(std::remove_if(m_selection.begin(), m_selection.end(), [&](const SceneSelection& selection) {
+        switch (selection.kind) {
+        case SelectionKind::Player:
+            return selection.entity != &scene.getPlayer();
+        case SelectionKind::Enemy:
+            return std::none_of(scene.getEnemies().begin(), scene.getEnemies().end(), [&](const std::unique_ptr<Enemy>& enemy) {
+                return enemy.get() == selection.entity;
+            });
+        case SelectionKind::Bullet:
+            return std::none_of(scene.getBullets().begin(), scene.getBullets().end(), [&](const std::unique_ptr<Bullet>& bullet) {
+                return bullet.get() == selection.entity;
+            });
+        case SelectionKind::EnemyBullet:
+            return !isEnemyBulletAlive(selection.entity);
+        default:
+            return true;
+        }
+    }), m_selection.end());
 }
 
 void EditorApplication::renderViewportPanel() {
@@ -388,7 +676,7 @@ void EditorApplication::cleanupViewportResources() {
 
     if (m_viewportResourcesCreated) {
         if (m_viewportDescriptorSet != VK_NULL_HANDLE) {
-            ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<ImTextureID>(m_viewportDescriptorSet));
+            ImGui_ImplVulkan_RemoveTexture(m_viewportDescriptorSet);
             m_viewportDescriptorSet = VK_NULL_HANDLE;
         }
 

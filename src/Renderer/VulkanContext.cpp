@@ -412,8 +412,10 @@ VkShaderModule VulkanContext::createShaderModule(const std::vector<char>& code) 
 }
 
 void VulkanContext::createGraphicsPipeline() {
-    // For now, we'll use runtime compilation or pre-compiled shaders
-    // Let's compile them at build time - we'll load the .spv files
+    // Two instanced sprite pipelines are built here: one alpha blended (ships,
+    // power-ups, UI) and one additive (lasers, sparks, energy effects). They
+    // share a single layout and shader pair so SpriteBatch can flip between
+    // them mid-render pass with nothing but a vkCmdBindPipeline.
     auto vertShaderCode = readFile("shaders/sprite.vert.spv");
     auto fragShaderCode = readFile("shaders/sprite.frag.spv");
 
@@ -434,27 +436,53 @@ void VulkanContext::createGraphicsPipeline() {
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
-    // Vertex input: position (vec2) and color (vec3)
-    VkVertexInputBindingDescription bindingDescription{};
-    bindingDescription.binding = 0;
-    bindingDescription.stride = sizeof(float) * 5; // 2 floats for position + 3 for color
-    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    // Binding 0: the shared unit quad, one vec2 per vertex.
+    // Binding 1: the per-instance stream written by SpriteBatch.
+    //            centre (vec2) | size (vec2) | rotation (float) | colour (vec4) | uvRect (vec4)
+    std::vector<VkVertexInputBindingDescription> bindingDescriptions(2);
+    bindingDescriptions[0].binding = 0;
+    bindingDescriptions[0].stride = sizeof(float) * 2;
+    bindingDescriptions[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    std::vector<VkVertexInputAttributeDescription> attributeDescriptions(2);
+    bindingDescriptions[1].binding = 1;
+    bindingDescriptions[1].stride = sizeof(float) * 13;
+    bindingDescriptions[1].inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
+
+    std::vector<VkVertexInputAttributeDescription> attributeDescriptions(6);
     attributeDescriptions[0].binding = 0;
     attributeDescriptions[0].location = 0;
     attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
     attributeDescriptions[0].offset = 0;
 
-    attributeDescriptions[1].binding = 0;
+    attributeDescriptions[1].binding = 1;
     attributeDescriptions[1].location = 1;
-    attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-    attributeDescriptions[1].offset = sizeof(float) * 2;
+    attributeDescriptions[1].format = VK_FORMAT_R32G32_SFLOAT;
+    attributeDescriptions[1].offset = 0;
+
+    attributeDescriptions[2].binding = 1;
+    attributeDescriptions[2].location = 2;
+    attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+    attributeDescriptions[2].offset = sizeof(float) * 2;
+
+    attributeDescriptions[3].binding = 1;
+    attributeDescriptions[3].location = 3;
+    attributeDescriptions[3].format = VK_FORMAT_R32_SFLOAT;
+    attributeDescriptions[3].offset = sizeof(float) * 4;
+
+    attributeDescriptions[4].binding = 1;
+    attributeDescriptions[4].location = 4;
+    attributeDescriptions[4].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attributeDescriptions[4].offset = sizeof(float) * 5;
+
+    attributeDescriptions[5].binding = 1;
+    attributeDescriptions[5].location = 5;
+    attributeDescriptions[5].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attributeDescriptions[5].offset = sizeof(float) * 9;
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(bindingDescriptions.size());
+    vertexInputInfo.pVertexBindingDescriptions = bindingDescriptions.data();
     vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
     vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
@@ -482,13 +510,27 @@ void VulkanContext::createGraphicsPipeline() {
     viewportState.scissorCount = 1;
     viewportState.pScissors = &scissor;
 
+    // Viewport and scissor are dynamic so the same pipeline serves the swapchain
+    // and the editor's off-screen viewport image, whatever size it happens to be.
+    const VkDynamicState dynamicStates[] = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
+
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates = dynamicStates;
+
     VkPipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    // Sprites can be mirrored via a negative size, which flips winding; culling
+    // is off so that keeps working.
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
     rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -497,31 +539,62 @@ void VulkanContext::createGraphicsPipeline() {
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+    // Straight alpha blending for opaque-ish art.
+    VkPipelineColorBlendAttachmentState alphaBlendAttachment{};
+    alphaBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    colorBlendAttachment.blendEnable = VK_TRUE;
-    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    alphaBlendAttachment.blendEnable = VK_TRUE;
+    alphaBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    alphaBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    alphaBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    alphaBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    alphaBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    alphaBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
-    VkPipelineColorBlendStateCreateInfo colorBlending{};
-    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    colorBlending.logicOpEnable = VK_FALSE;
-    colorBlending.attachmentCount = 1;
-    colorBlending.pAttachments = &colorBlendAttachment;
+    // Additive: destination is never darkened, which is what energy effects want.
+    VkPipelineColorBlendAttachmentState additiveBlendAttachment = alphaBlendAttachment;
+    additiveBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    additiveBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    additiveBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    additiveBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
 
-    // Push constants for position and scale
+    VkPipelineColorBlendStateCreateInfo alphaBlending{};
+    alphaBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    alphaBlending.logicOpEnable = VK_FALSE;
+    alphaBlending.attachmentCount = 1;
+    alphaBlending.pAttachments = &alphaBlendAttachment;
+
+    VkPipelineColorBlendStateCreateInfo additiveBlending = alphaBlending;
+    additiveBlending.pAttachments = &additiveBlendAttachment;
+
+    // Set 0, binding 0: the sprite atlas.
+    VkDescriptorSetLayoutBinding atlasBinding{};
+    atlasBinding.binding = 0;
+    atlasBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    atlasBinding.descriptorCount = 1;
+    atlasBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    atlasBinding.pImmutableSamplers = nullptr;
+
+    VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{};
+    descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptorLayoutInfo.bindingCount = 1;
+    descriptorLayoutInfo.pBindings = &atlasBinding;
+
+    if (vkCreateDescriptorSetLayout(m_device, &descriptorLayoutInfo, nullptr,
+                                    &m_spriteDescriptorSetLayout) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create sprite descriptor set layout");
+    }
+
+    // Push constant: the projection extent in world pixels.
     VkPushConstantRange pushConstantRange{};
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     pushConstantRange.offset = 0;
-    pushConstantRange.size = sizeof(float) * 4; // vec2 position + vec2 scale
+    pushConstantRange.size = kSpritePushConstantSize;
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &m_spriteDescriptorSetLayout;
     pipelineLayoutInfo.pushConstantRangeCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
@@ -538,14 +611,24 @@ void VulkanContext::createGraphicsPipeline() {
     pipelineInfo.pViewportState = &viewportState;
     pipelineInfo.pRasterizationState = &rasterizer;
     pipelineInfo.pMultisampleState = &multisampling;
-    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.pColorBlendState = &alphaBlending;
+    pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = m_pipelineLayout;
     pipelineInfo.renderPass = m_renderPass;
     pipelineInfo.subpass = 0;
 
-    if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create graphics pipeline");
+    VkGraphicsPipelineCreateInfo additivePipelineInfo = pipelineInfo;
+    additivePipelineInfo.pColorBlendState = &additiveBlending;
+
+    const VkGraphicsPipelineCreateInfo pipelineInfos[] = { pipelineInfo, additivePipelineInfo };
+    VkPipeline pipelines[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+
+    if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 2, pipelineInfos, nullptr, pipelines) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create sprite graphics pipelines");
     }
+
+    m_pipeline = pipelines[0];
+    m_pipelineAdditive = pipelines[1];
 
     vkDestroyShaderModule(m_device, fragShaderModule, nullptr);
     vkDestroyShaderModule(m_device, vertShaderModule, nullptr);
@@ -661,9 +744,19 @@ void VulkanContext::DestroyDebugUtilsMessengerEXT(
 void VulkanContext::cleanup() {
     if (m_pipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(m_device, m_pipeline, nullptr);
+        m_pipeline = VK_NULL_HANDLE;
+    }
+    if (m_pipelineAdditive != VK_NULL_HANDLE) {
+        vkDestroyPipeline(m_device, m_pipelineAdditive, nullptr);
+        m_pipelineAdditive = VK_NULL_HANDLE;
     }
     if (m_pipelineLayout != VK_NULL_HANDLE) {
         vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+        m_pipelineLayout = VK_NULL_HANDLE;
+    }
+    if (m_spriteDescriptorSetLayout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(m_device, m_spriteDescriptorSetLayout, nullptr);
+        m_spriteDescriptorSetLayout = VK_NULL_HANDLE;
     }
 
     if (m_commandPool != VK_NULL_HANDLE) {

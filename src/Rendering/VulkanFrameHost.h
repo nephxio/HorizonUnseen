@@ -36,6 +36,12 @@ public:
 
     bool shouldClose() const;
     GLFWwindow* getWindow() const { return m_window; }
+
+    // Index of the frame currently being recorded. Stable for the duration of
+    // the client's recordScene call, so renderers can use it to pick a
+    // per-frame-in-flight buffer region without racing the GPU.
+    uint32_t getCurrentFrameIndex() const { return m_currentFrame; }
+    static constexpr uint32_t framesInFlight() { return MAX_FRAMES_IN_FLIGHT; }
     VulkanContext& getContext() { return *m_context; }
     const VulkanContext& getContext() const { return *m_context; }
 

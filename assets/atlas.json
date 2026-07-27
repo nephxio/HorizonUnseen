@@ -1,0 +1,217 @@
+{
+  "image": "atlas.png",
+  "width": 1024,
+  "height": 1024,
+  "sprites": {
+    "ship_player": {
+      "x": 604,
+      "y": 2,
+      "w": 64,
+      "h": 40
+    },
+    "ship_player_bank_up": {
+      "x": 736,
+      "y": 2,
+      "w": 64,
+      "h": 40
+    },
+    "ship_player_bank_down": {
+      "x": 670,
+      "y": 2,
+      "w": 64,
+      "h": 40
+    },
+    "enemy_drifter": {
+      "x": 944,
+      "y": 2,
+      "w": 48,
+      "h": 32
+    },
+    "enemy_waverider": {
+      "x": 852,
+      "y": 2,
+      "w": 52,
+      "h": 36
+    },
+    "enemy_diver": {
+      "x": 2,
+      "y": 164,
+      "w": 44,
+      "h": 28
+    },
+    "enemy_turret": {
+      "x": 802,
+      "y": 2,
+      "w": 48,
+      "h": 40
+    },
+    "enemy_splitter": {
+      "x": 558,
+      "y": 2,
+      "w": 44,
+      "h": 44
+    },
+    "enemy_splitter_child": {
+      "x": 228,
+      "y": 164,
+      "w": 24,
+      "h": 24
+    },
+    "enemy_orbiter": {
+      "x": 458,
+      "y": 2,
+      "w": 48,
+      "h": 48
+    },
+    "enemy_mine": {
+      "x": 906,
+      "y": 2,
+      "w": 36,
+      "h": 36
+    },
+    "enemy_boss": {
+      "x": 2,
+      "y": 2,
+      "w": 192,
+      "h": 160
+    },
+    "bullet_player": {
+      "x": 448,
+      "y": 164,
+      "w": 16,
+      "h": 8
+    },
+    "missile_player": {
+      "x": 388,
+      "y": 164,
+      "w": 24,
+      "h": 10
+    },
+    "lance_player": {
+      "x": 414,
+      "y": 164,
+      "w": 32,
+      "h": 8
+    },
+    "laser_segment": {
+      "x": 276,
+      "y": 164,
+      "w": 16,
+      "h": 24
+    },
+    "laser_head": {
+      "x": 254,
+      "y": 164,
+      "w": 20,
+      "h": 24
+    },
+    "bullet_enemy": {
+      "x": 334,
+      "y": 164,
+      "w": 12,
+      "h": 12
+    },
+    "bullet_enemy_heavy": {
+      "x": 294,
+      "y": 164,
+      "w": 20,
+      "h": 20
+    },
+    "missile_enemy": {
+      "x": 362,
+      "y": 164,
+      "w": 24,
+      "h": 10
+    },
+    "powerup_spread": {
+      "x": 198,
+      "y": 164,
+      "w": 28,
+      "h": 28
+    },
+    "powerup_missile": {
+      "x": 138,
+      "y": 164,
+      "w": 28,
+      "h": 28
+    },
+    "powerup_laser": {
+      "x": 108,
+      "y": 164,
+      "w": 28,
+      "h": 28
+    },
+    "powerup_cannon": {
+      "x": 48,
+      "y": 164,
+      "w": 28,
+      "h": 28
+    },
+    "powerup_repair": {
+      "x": 168,
+      "y": 164,
+      "w": 28,
+      "h": 28
+    },
+    "powerup_energy": {
+      "x": 78,
+      "y": 164,
+      "w": 28,
+      "h": 28
+    },
+    "particle_spark": {
+      "x": 466,
+      "y": 164,
+      "w": 16,
+      "h": 8
+    },
+    "particle_glow": {
+      "x": 326,
+      "y": 2,
+      "w": 64,
+      "h": 64
+    },
+    "particle_smoke": {
+      "x": 508,
+      "y": 2,
+      "w": 48,
+      "h": 48
+    },
+    "particle_ring": {
+      "x": 392,
+      "y": 2,
+      "w": 64,
+      "h": 64
+    },
+    "particle_shard": {
+      "x": 348,
+      "y": 164,
+      "w": 12,
+      "h": 12
+    },
+    "star_small": {
+      "x": 484,
+      "y": 164,
+      "w": 8,
+      "h": 8
+    },
+    "star_large": {
+      "x": 316,
+      "y": 164,
+      "w": 16,
+      "h": 16
+    },
+    "nebula_patch": {
+      "x": 196,
+      "y": 2,
+      "w": 128,
+      "h": 128
+    },
+    "white": {
+      "x": 494,
+      "y": 164,
+      "w": 4,
+      "h": 4
+    }
+  }
+}

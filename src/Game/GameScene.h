@@ -17,8 +17,11 @@ public:
 
     void update(float deltaTime, const InputSystem& input);
 
+    Player& getPlayer() { return m_player; }
     const Player& getPlayer() const { return m_player; }
+    std::vector<std::unique_ptr<Enemy>>& getEnemies() { return m_enemies; }
     const std::vector<std::unique_ptr<Enemy>>& getEnemies() const { return m_enemies; }
+    std::vector<std::unique_ptr<Bullet>>& getBullets() { return m_bullets; }
     const std::vector<std::unique_ptr<Bullet>>& getBullets() const { return m_bullets; }
     BulletPool& getEnemyBulletPool() { return m_enemyBulletPool; }
     const BulletPool& getEnemyBulletPool() const { return m_enemyBulletPool; }

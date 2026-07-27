@@ -4,7 +4,9 @@
 #include <GLFW/glfw3.h>
 
 #include <memory>
+#include <vector>
 
+#include "Game/Entity.h"
 #include "Game/GameSession.h"
 #include "Rendering/SceneRenderer.h"
 #include "Rendering/VulkanFrameHost.h"
@@ -18,6 +20,19 @@ public:
     void run();
 
 private:
+    enum class SelectionKind {
+        None,
+        Player,
+        Enemy,
+        Bullet,
+        EnemyBullet
+    };
+
+    struct SceneSelection {
+        SelectionKind kind = SelectionKind::None;
+        Entity* entity = nullptr;
+    };
+
     void init();
     void initViewportResources();
     void updateViewportTexture();
@@ -27,10 +42,16 @@ private:
     void recordScene(VkCommandBuffer commandBuffer) override;
     void renderUi() override;
     void renderDockspace();
-    void renderHierarchyPanel();
-    void renderInspectorPanel();
+    void renderHierarchyPanel(GameScene& scene);
+    void renderInspectorPanel(GameScene& scene);
     void renderContentBrowserPanel();
     void renderViewportPanel();
+    void selectEntity(SelectionKind kind, Entity* entity, bool additive = false);
+    void clearSelection();
+    void validateSelection(GameScene& scene);
+    bool isSelected(const Entity* entity) const;
+    const char* getSelectionLabel(SelectionKind kind) const;
+    void renderEntityInspector(Entity& entity, SelectionKind kind);
     void cleanup();
 
     VulkanFrameHost m_frameHost;
@@ -38,6 +59,7 @@ private:
     std::unique_ptr<GameSession> m_gameSession;
     FrameTimer m_frameTimer;
     bool m_isCleanedUp = false;
+    std::vector<SceneSelection> m_selection;
 
     VkImage m_viewportImage = VK_NULL_HANDLE;
     VkDeviceMemory m_viewportImageMemory = VK_NULL_HANDLE;
@@ -51,8 +73,6 @@ private:
     bool m_viewportResourcesCreated = false;
     bool m_viewportImageReady = false;
     float m_viewportAnimation = 0.0f;
-
-    int m_selectedItem = -1;
     bool m_showHierarchy = true;
     bool m_showInspector = true;
     bool m_showContentBrowser = true;

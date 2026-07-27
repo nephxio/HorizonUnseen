@@ -19,6 +19,7 @@ public:
 
     void queueDamage(float damage);
     void updateHealthSystem(float deltaTime);
+    HealthSystem& getHealthSystem() { return m_healthSystem; }
     const HealthSystem& getHealthSystem() const { return m_healthSystem; }
 
     // ICollidable interface

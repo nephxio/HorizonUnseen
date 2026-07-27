@@ -1,17 +1,27 @@
 #pragma once
 
+// Window + frame plumbing for the game executable.
+//
+// The renderer owns the window, the Vulkan context and the batched sprite
+// renderer. It does not know what a scene is: each frame the application hands
+// it a DrawList to draw and a callback that emits the UI.
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
-#include <vector>
 
+#include <functional>
+
+#include "Core/DrawList.h"
+#include "Rendering/SceneRenderer.h"
 #include "Rendering/VulkanFrameHost.h"
 
-class GameScene;
 class VulkanContext;
 
 class VulkanRenderer : public IVulkanFrameClient {
 public:
+    using UiCallback = std::function<void()>;
+
     VulkanRenderer();
     ~VulkanRenderer();
 
@@ -19,6 +29,11 @@ public:
     void cleanup();
 
     void renderFrame();
+
+    // Valid only for the duration of the following renderFrame call; the
+    // application owns the list.
+    void setDrawList(const hu::DrawList* drawList) { m_drawList = drawList; }
+    void setUiCallback(UiCallback callback) { m_uiCallback = std::move(callback); }
 
     VkClearValue getClearColor() const override;
     void recordScene(VkCommandBuffer commandBuffer) override;
@@ -28,33 +43,17 @@ public:
     void waitIdle();
     GLFWwindow* getWindow() const { return m_window; }
 
-    void setGameScene(const GameScene* scene) { m_gameScene = scene; }
+    float getViewportWidth() const { return static_cast<float>(WIDTH); }
+    float getViewportHeight() const { return static_cast<float>(HEIGHT); }
 
 private:
-    void initWindow();
-    void initVulkan();
-    void initImGui();
-    void createVertexBuffer();
-    void createEnemyVertexBuffer();
-    void createBulletVertexBuffer();
-    void createEnemyBulletVertexBuffer();
-
-    GLFWwindow* m_window;
+    GLFWwindow* m_window = nullptr;
     VulkanContext* m_context = nullptr;
     VulkanFrameHost m_frameHost;
-    const GameScene* m_gameScene = nullptr;
+    SceneRenderer m_sceneRenderer;
 
-    VkBuffer m_vertexBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory m_vertexBufferMemory = VK_NULL_HANDLE;
-
-    VkBuffer m_enemyVertexBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory m_enemyVertexBufferMemory = VK_NULL_HANDLE;
-
-    VkBuffer m_bulletVertexBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory m_bulletVertexBufferMemory = VK_NULL_HANDLE;
-
-    VkBuffer m_enemyBulletVertexBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory m_enemyBulletVertexBufferMemory = VK_NULL_HANDLE;
+    const hu::DrawList* m_drawList = nullptr;
+    UiCallback m_uiCallback;
 
     bool m_isCleanedUp = false;
 
