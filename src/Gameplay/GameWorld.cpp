@@ -239,9 +239,10 @@ void GameWorld::handleInput(float deltaTime, const InputSystem& input) {
     Vector2 move{ 0.0f, 0.0f };
     if (input.isKeyPressed(GLFW_KEY_A) || input.isKeyPressed(GLFW_KEY_LEFT))  { move.x -= 1.0f; }
     if (input.isKeyPressed(GLFW_KEY_D) || input.isKeyPressed(GLFW_KEY_RIGHT)) { move.x += 1.0f; }
-    // Screen space is y-up in this projection, so W/Up increases y.
-    if (input.isKeyPressed(GLFW_KEY_W) || input.isKeyPressed(GLFW_KEY_UP))    { move.y += 1.0f; }
-    if (input.isKeyPressed(GLFW_KEY_S) || input.isKeyPressed(GLFW_KEY_DOWN))  { move.y -= 1.0f; }
+    // World space is y-DOWN (see the projection in shaders/sprite.vert), so
+    // moving up the screen means decreasing y.
+    if (input.isKeyPressed(GLFW_KEY_W) || input.isKeyPressed(GLFW_KEY_UP))    { move.y -= 1.0f; }
+    if (input.isKeyPressed(GLFW_KEY_S) || input.isKeyPressed(GLFW_KEY_DOWN))  { move.y += 1.0f; }
 
     if (lengthSquared(move) > 0.0f) {
         move = normalize(move);
@@ -535,9 +536,10 @@ void GameWorld::buildDrawList(DrawList& out) const {
 
     // The ship banks with vertical movement, which sells the motion.
     if (m_player.alive) {
+        // y is down, so a negative y velocity is movement up the screen.
         SpriteId shipSprite = SpriteId::ShipPlayer;
-        if (m_player.velocity.y > 20.0f)       { shipSprite = SpriteId::ShipPlayerBankUp; }
-        else if (m_player.velocity.y < -20.0f) { shipSprite = SpriteId::ShipPlayerBankDown; }
+        if (m_player.velocity.y < -20.0f)      { shipSprite = SpriteId::ShipPlayerBankUp; }
+        else if (m_player.velocity.y > 20.0f)  { shipSprite = SpriteId::ShipPlayerBankDown; }
 
         Color tint = White;
         if (m_player.hitFlash > 0.0f) {
