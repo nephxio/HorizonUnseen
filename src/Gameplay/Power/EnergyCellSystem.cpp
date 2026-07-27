@@ -245,6 +245,25 @@ bool EnergyCellSystem::consumeCharge(int cellCount) {
         HU_LOG_DEBUG("Cells", "Cell %zu discharged for superweapon", i + 1);
     }
 
+    // Charge always fills bottom-up, so the only valid resting state is
+    // "cells 1..k full, at most one partial above them, the rest empty".
+    // Draining full cells out of the middle of the stack would otherwise strand
+    // a partially charged cell above the empties, where it can never be spent
+    // because refilling restarts at the lowest unfilled cell. Firing dumps that
+    // leftover progress along with the cells it consumed.
+    float discarded = 0.0f;
+    for (std::size_t i = 0; i < CellCount; ++i) {
+        EnergyCell& c = m_cells[i];
+        if (!c.isCharged() && c.charge > 0.0f) {
+            discarded += c.charge;
+            c.charge = 0.0f;
+        }
+    }
+    if (discarded > 0.0f) {
+        HU_LOG_DEBUG("Cells", "Discarded %.1f partial charge left above the consumed cells",
+                     static_cast<double>(discarded));
+    }
+
     HU_LOG_INFO("Cells", "Consumed %d charged cell(s); %d remain charged",
                 cellCount, chargedCellCount());
     return true;
