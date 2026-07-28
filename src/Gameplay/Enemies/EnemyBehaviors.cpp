@@ -341,7 +341,12 @@ void WaveRiderBehavior::update(EnemyBase& self, float dt, IGameWorld& world) {
     pos.y = m_baseY + std::sin(m_wavePhase) * m_amplitude;
     self.setPosition(pos);
     self.setVelocity({ vx, vy });
-    bankToHeading(self);
+
+    // Deliberately not banked. Each rider in a formation sits at a different
+    // point in the shared wave, so banking toward the heading left every member
+    // of a squadron tilted by a different amount at any instant, which read as
+    // broken rather than as motion. They stay level.
+    self.setRotation(0.0f);
 
     m_fireTimer -= dt;
     if (m_fireTimer <= 0.0f && onScreenToFire(self, world)) {
