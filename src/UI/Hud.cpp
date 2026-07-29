@@ -271,9 +271,9 @@ void Hud::drawLevelProgress(const HudModel& model, float viewportWidth) {
                       ImVec2(x + width * std::clamp(model.levelProgress01, 0.0f, 1.0f), barY + 7.0f),
                       toU32(theme::Accent), 2.0f);
 
-    char stats[128];
-    std::snprintf(stats, sizeof(stats), "SCORE %lld    SECRETS %d/%d",
-                  model.score, model.secretsFound, model.secretsTotal);
+    char stats[160];
+    std::snprintf(stats, sizeof(stats), "SCORE %lld    GRAZE %lld    SECRETS %d/%d",
+                  model.score, model.grazeCount, model.secretsFound, model.secretsTotal);
     const ImVec2 statsSize = ImGui::CalcTextSize(stats);
     dl->AddText(ImVec2(x + width - statsSize.x, barY + 12.0f), toU32(theme::TextDim), stats);
 }

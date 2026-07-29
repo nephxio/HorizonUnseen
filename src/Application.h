@@ -39,6 +39,7 @@ private:
     void startLevel(hu::DifficultyMode mode);
     void returnToMenu();
     void applyMenuAction(hu::MenuAction action);
+    void applyDebugRequest(const hu::DebugRequest& request);
 
     // View-model construction. The UI never touches gameplay objects directly.
     void buildHudModel();

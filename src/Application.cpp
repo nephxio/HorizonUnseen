@@ -204,7 +204,55 @@ void Application::drawUi() {
 
     applyMenuAction(action);
 
-    m_debugOverlay.draw(m_debugStats, m_hudModel, m_debugOpen);
+    hu::DebugRequest debugRequest;
+    m_debugOverlay.draw(m_debugStats, m_hudModel, m_debugOpen, debugRequest);
+    applyDebugRequest(debugRequest);
+}
+
+void Application::applyDebugRequest(const hu::DebugRequest& request) {
+    // Mode switches restart the level, so handle them first and return: the
+    // remaining cheats would be acting on a world that is about to be replaced.
+    if (request.startBulletHell) {
+        HU_LOG_INFO(LogCat, "DEBUG: restarting in bullet hell");
+        startLevel(hu::DifficultyMode::BulletHell);
+        return;
+    }
+    if (request.startNormal) {
+        HU_LOG_INFO(LogCat, "DEBUG: restarting in normal");
+        startLevel(hu::DifficultyMode::Normal);
+        return;
+    }
+
+    if (request.unlockAllSecrets) {
+        // Driven off the registry, so new levels' secrets are covered
+        // automatically.
+        std::size_t unlocked = 0;
+        for (const hu::SecretDefinition& secret : hu::SecretRegistry::all()) {
+            if (hu::SaveGame::instance().unlockSecret(secret.id)) {
+                ++unlocked;
+            }
+        }
+        hu::SaveGame::instance().save();
+        buildProgressModel();
+        HU_LOG_INFO(LogCat, "DEBUG: unlocked %zu secret(s); bullet hell %s",
+                    unlocked,
+                    hu::SaveGame::instance().bulletHellUnlocked() ? "UNLOCKED" : "still locked");
+    }
+
+    if (request.resetProgress) {
+        hu::SaveGame::instance().resetProgress();
+        hu::SaveGame::instance().save();
+        buildProgressModel();
+        HU_LOG_INFO(LogCat, "DEBUG: progress reset");
+    }
+
+    if (request.fillCharge)        { m_world->debugFillCharge(); }
+    if (request.repairAllCells)    { m_world->debugRepairAllCells(); }
+    if (request.breakOneCell)      { m_world->debugBreakOneCell(); }
+    if (request.grantAllWeapons)   { m_world->debugGrantAllWeapons(); }
+    if (request.killAllEnemies)    { m_world->debugKillAllEnemies(); }
+    if (request.skipToBoss)        { m_world->debugSkipToBoss(); }
+    if (request.toggleInvulnerable){ m_world->debugToggleInvulnerable(); }
 }
 
 void Application::applyMenuAction(hu::MenuAction action) {
@@ -333,6 +381,7 @@ void Application::buildHudModel() {
     const std::string& levelId = m_world->levelId();
     m_hudModel.secretsFound = static_cast<int>(hu::SaveGame::instance().secretsFoundInLevel(levelId));
     m_hudModel.secretsTotal = static_cast<int>(hu::SaveGame::instance().secretsTotalInLevel(levelId));
+    m_hudModel.grazeCount = m_world->grazeCount();
 
     float bossHealth = 0.0f;
     m_hudModel.bossActive = m_world->bossStatus(bossHealth);
@@ -397,6 +446,10 @@ void Application::buildDebugStats() {
     m_debugStats.damageWindowRate = m_world->cells().windowedDamageRate();
     m_debugStats.activeThreshold = m_hudModel.damageThreshold;
     m_debugStats.playerPosition = m_world->player().position;
+
+    m_debugStats.hitboxRadius = m_world->hitboxRadius();
+    m_debugStats.grazeRadius = m_world->grazeRadius();
+    m_debugStats.grazeCount = m_world->grazeCount();
 }
 
 void Application::cleanup() {

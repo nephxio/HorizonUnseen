@@ -52,6 +52,11 @@ struct HudModel {
     int secretsFound = 0;
     int secretsTotal = 0;
 
+    // Near-misses this run. Grazing converts incoming fire into cell charge,
+    // so this doubles as a readout of how much superweapon fuel the player is
+    // earning by flying close.
+    long long grazeCount = 0;
+
     bool bossActive = false;
     float bossHealth01 = 0.0f;
     std::string bossName;

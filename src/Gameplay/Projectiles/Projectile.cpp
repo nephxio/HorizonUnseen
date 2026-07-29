@@ -57,6 +57,7 @@ void Projectile::initialize(const ProjectileSpawn& spawn, Faction faction) {
 
     m_targetHandle = InvalidTarget;
     m_reacquireTimer = 0.0f;
+    m_grazed = false;
 
     if (m_motion == ProjectileMotion::Orbiting) {
         m_orbitAnchor = spawn.position;

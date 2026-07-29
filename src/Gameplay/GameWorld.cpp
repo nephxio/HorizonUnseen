@@ -43,6 +43,29 @@ constexpr float EnergyBombBossDamage = 900.0f;
 // Score awarded for finding a secret.
 constexpr long long SecretScore = 2500;
 
+// --- Hitbox and grazing ----------------------------------------------------
+//
+// The ship sprite is 64x40, but the collision radius is deliberately far
+// smaller than it looks, and smaller still in bullet hell. Dense patterns are
+// only fair when the player can thread a gap the ship appears not to fit
+// through, so bullet hell uses a near-pixel hitbox with a visible core marker.
+constexpr float NormalHitboxRadius = 15.0f;
+constexpr float BulletHellHitboxRadius = 4.0f;
+
+// Width of the near-miss band measured outward from the hitbox surface.
+constexpr float GrazeBandWidth = 22.0f;
+
+// Charge granted per bullet grazed. Cell 1 holds 50, so roughly 33 near-misses
+// fill it -- reachable in a dense pattern, negligible in normal play where
+// there simply are not enough bullets.
+constexpr float GrazeChargeAmount = 1.5f;
+
+// Score per graze, so the risk reads as a reward even when cells are full.
+constexpr long long GrazeScore = 10;
+
+// Minimum spacing between graze particle bursts.
+constexpr float GrazeEffectInterval = 0.06f;
+
 constexpr const char* LogCat = "World";
 
 // Shortest distance from point p to the segment a..b. Used for beam hits.
@@ -93,6 +116,9 @@ bool GameWorld::startLevel(const std::string& levelId, DifficultyMode mode) {
     m_difficulty = mode;
 
     m_player = PlayerShip{};
+    // Keep the stored radius consistent with the mode so anything reading it
+    // sees the same value collision uses.
+    m_player.radius = hitboxRadius();
     m_cells.reset();
     m_weapons.reset();
     m_super.reset();
@@ -112,6 +138,8 @@ bool GameWorld::startLevel(const std::string& levelId, DifficultyMode mode) {
     m_score = 0;
     m_nextHandle = 1;
     m_lastBrokenCells = 0;
+    m_grazeCount = 0;
+    m_grazeEffectTimer = 0.0f;
     m_shakeIntensity = 0.0f;
     m_shakeTimer = 0.0f;
     m_shakeOffset = { 0.0f, 0.0f };
@@ -162,6 +190,7 @@ void GameWorld::update(float deltaTime, const InputSystem& input) {
     m_projectiles.update(deltaTime, *this);
 
     updateCollisions(deltaTime);
+    updateGrazing(deltaTime);
     applyBeamDamage(deltaTime);
 
     resolveEnemyDeaths();
@@ -377,7 +406,7 @@ void GameWorld::updateCollisions(float deltaTime) {
             if (!shot.alive()) {
                 continue;
             }
-            const float reach = shot.radius() + m_player.radius;
+            const float reach = shot.radius() + hitboxRadius();
             if (distanceSquared(shot.position(), m_player.position) > reach * reach) {
                 continue;
             }
@@ -392,13 +421,74 @@ void GameWorld::updateCollisions(float deltaTime) {
             if (!enemy->isAlive()) {
                 continue;
             }
-            const float reach = m_player.radius + enemy->radius();
+            const float reach = hitboxRadius() + enemy->radius();
             if (distanceSquared(m_player.position, enemy->position()) > reach * reach) {
                 continue;
             }
             // Scaled by dt so contact damage is a rate while overlapping.
             damagePlayer(enemy->contactDamage() * (deltaTime / ContactDamageInterval),
                          enemy->position());
+        }
+    }
+}
+
+float GameWorld::hitboxRadius() const {
+    return m_difficulty == DifficultyMode::BulletHell ? BulletHellHitboxRadius
+                                                      : NormalHitboxRadius;
+}
+
+float GameWorld::grazeRadius() const {
+    return hitboxRadius() + GrazeBandWidth;
+}
+
+// Near-misses convert incoming fire into superweapon charge.
+//
+// This is what keeps the energy-cell economy intact under bullet hell. Cells
+// charge only while sustained damage stays under threshold, and a dense pattern
+// would otherwise pin the player permanently over it, turning the mode into
+// pure attrition. Grazing pays out for flying close without being hit, so more
+// bullets means more fuel rather than less -- and it gives the shrunken hitbox
+// a purpose beyond survival.
+//
+// No mode special-casing is needed: the band is measured from the hitbox
+// surface, so in normal play the window is narrow and bullets are scarce, while
+// bullet hell widens it relatively and floods it with targets.
+void GameWorld::updateGrazing(float deltaTime) {
+    m_grazeEffectTimer = std::max(0.0f, m_grazeEffectTimer - deltaTime);
+
+    if (!m_player.alive) {
+        return;
+    }
+
+    const float hitbox = hitboxRadius();
+    const float outer = grazeRadius();
+
+    for (Projectile& shot : m_projectiles.enemyProjectiles()) {
+        if (!shot.alive() || shot.hasGrazed()) {
+            continue;
+        }
+
+        const float distance = hu::distance(shot.position(), m_player.position);
+        const float hitDistance = shot.radius() + hitbox;
+        const float grazeDistance = shot.radius() + outer;
+
+        // Inside the hitbox is a hit, not a graze; the collision pass owns that.
+        if (distance <= hitDistance || distance > grazeDistance) {
+            continue;
+        }
+
+        shot.markGrazed();
+        ++m_grazeCount;
+        m_score += GrazeScore;
+        m_cells.addCharge(GrazeChargeAmount);
+
+        if (m_grazeEffectTimer <= 0.0f) {
+            m_grazeEffectTimer = GrazeEffectInterval;
+            EffectRequest fx;
+            fx.kind = EffectKind::CellCharge;
+            fx.position = shot.position();
+            fx.scale = 0.35f;
+            spawnEffect(fx);
         }
     }
 }
@@ -471,7 +561,8 @@ void GameWorld::collectPowerups() {
 }
 
 void GameWorld::damagePlayer(float amount, Vector2 source) {
-    if (amount <= 0.0f || !m_player.alive || m_player.invulnerable > 0.0f) {
+    if (amount <= 0.0f || !m_player.alive || m_player.invulnerable > 0.0f ||
+        m_debugInvulnerable) {
         return;
     }
 
@@ -519,6 +610,92 @@ bool GameWorld::bossStatus(float& healthFraction) const {
 }
 
 // ---------------------------------------------------------------------------
+// Debug / playtest hooks
+// ---------------------------------------------------------------------------
+
+void GameWorld::debugFillCharge() {
+    // Enough to top every cell regardless of capacity; routeToCharge clamps and
+    // fills bottom-up exactly as normal play would.
+    m_cells.addCharge(1000.0f);
+    HU_LOG_INFO(LogCat, "DEBUG: charge filled, %d cells ready", m_cells.chargedCellCount());
+}
+
+void GameWorld::debugRepairAllCells() {
+    for (std::size_t i = 0; i < EnergyCellSystem::CellCount; ++i) {
+        m_cells.repairLowestBrokenCell();
+    }
+    m_lastBrokenCells = m_cells.brokenCellCount();
+    m_player.alive = m_cells.isAlive();
+    HU_LOG_INFO(LogCat, "DEBUG: all cells repaired");
+}
+
+void GameWorld::debugBreakOneCell() {
+    // Feed a burst far over any threshold so the routing sends it to hit points.
+    for (int i = 0; i < 40; ++i) {
+        m_cells.applyDamage(60.0f, m_levelTime);
+    }
+    HU_LOG_INFO(LogCat, "DEBUG: forced damage, %zu cell(s) broken",
+                m_cells.brokenCellCount());
+}
+
+void GameWorld::debugGrantAllWeapons() {
+    // MaxWeaponLevel pick-ups of each type: the first unlocks, the rest level up.
+    const PowerupType weaponPickups[] = {
+        PowerupType::BulletUpgrade,
+        PowerupType::WeaponSpread,
+        PowerupType::WeaponMissile,
+        PowerupType::WeaponLaser
+    };
+    for (PowerupType pickup : weaponPickups) {
+        for (int i = 0; i < MaxWeaponLevel; ++i) {
+            m_weapons.grantWeaponPowerup(pickup);
+        }
+    }
+    HU_LOG_INFO(LogCat, "DEBUG: all weapons granted at max level");
+}
+
+void GameWorld::debugKillAllEnemies() {
+    int killed = 0;
+    for (auto& enemy : m_enemies) {
+        if (enemy->isAlive()) {
+            enemy->destroy(*this);
+            ++killed;
+        }
+    }
+    HU_LOG_INFO(LogCat, "DEBUG: killed %d enemies", killed);
+}
+
+void GameWorld::debugSkipToBoss() {
+    // Clear the field, then run the director forward to the boss trigger. The
+    // director spawns the boss itself once its clock passes the wave time.
+    for (auto& enemy : m_enemies) {
+        if (enemy->isAlive() && !enemy->isBoss()) {
+            enemy->despawn();
+        }
+    }
+
+    const LevelDefinition* level = m_director.level();
+    if (!level) {
+        HU_LOG_WARN(LogCat, "DEBUG: skip to boss ignored, no level loaded");
+        return;
+    }
+
+    // Advance in coarse steps so the director fires its wave bookkeeping in
+    // order rather than being teleported past it.
+    const float target = level->duration;
+    while (m_director.elapsedTime() < target && !m_director.bossSpawned()) {
+        m_director.update(0.5f);
+    }
+    HU_LOG_INFO(LogCat, "DEBUG: skipped to boss (t=%.1f, spawned=%s)",
+                m_director.elapsedTime(), m_director.bossSpawned() ? "yes" : "no");
+}
+
+void GameWorld::debugToggleInvulnerable() {
+    m_debugInvulnerable = !m_debugInvulnerable;
+    HU_LOG_INFO(LogCat, "DEBUG: invulnerability %s", m_debugInvulnerable ? "ON" : "OFF");
+}
+
+// ---------------------------------------------------------------------------
 // Drawing
 // ---------------------------------------------------------------------------
 
@@ -552,6 +729,24 @@ void GameWorld::buildDrawList(DrawList& out) const {
 
         out.add(shipSprite, m_player.position, Vector2{ 64.0f, 40.0f },
                 DrawLayer::Player, tint);
+
+        // In bullet hell the hitbox is far smaller than the ship, so it has to
+        // be drawn or the player is dodging with information they do not have.
+        // A bright pulsing core marks the only part that can actually be hit,
+        // ringed faintly by the graze band that pays out charge.
+        if (m_difficulty == DifficultyMode::BulletHell) {
+            const float pulse = 0.75f + 0.25f * std::sin(m_levelTime * 9.0f);
+            const float core = hitboxRadius() * 2.0f;
+
+            out.add(SpriteId::ParticleGlow, m_player.position,
+                    Vector2{ grazeRadius() * 2.0f, grazeRadius() * 2.0f },
+                    DrawLayer::Player, Color{ 0.35f, 0.75f, 1.0f, 0.10f }, 0.0f, true);
+            out.add(SpriteId::ParticleGlow, m_player.position,
+                    Vector2{ core * 2.2f, core * 2.2f },
+                    DrawLayer::Player, Color{ 0.5f, 0.9f, 1.0f, 0.55f * pulse }, 0.0f, true);
+            out.add(SpriteId::White, m_player.position, Vector2{ core, core },
+                    DrawLayer::Player, Color{ 1.0f, 1.0f, 1.0f, 0.95f }, 0.0f, true);
+        }
     }
 
     m_projectiles.appendDraw(out);

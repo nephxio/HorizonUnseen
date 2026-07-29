@@ -46,6 +46,12 @@ public:
     SpriteId trailSprite() const { return m_trailSprite; }
     std::uint32_t targetHandle() const { return m_targetHandle; }
 
+    // Grazing: a bullet may only be counted as a near-miss once, otherwise a
+    // single slow shot drifting past would award charge every frame it stayed
+    // inside the band.
+    bool hasGrazed() const { return m_grazed; }
+    void markGrazed() { m_grazed = true; }
+
 private:
     void updateHoming(float deltaTime, IGameWorld& world);
     void updateOrbiting(float deltaTime, IGameWorld& world);
@@ -73,6 +79,7 @@ private:
     bool m_additive = false;
     bool m_emitsTrail = false;
     bool m_alive = false;
+    bool m_grazed = false;
 
     // Homing
     std::uint32_t m_targetHandle = InvalidTarget;

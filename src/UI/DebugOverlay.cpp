@@ -43,7 +43,8 @@ bool containsInsensitive(const std::string& haystack, const char* needle) {
 
 } // namespace
 
-void DebugOverlay::draw(const DebugStats& stats, const HudModel& hud, bool& open) {
+void DebugOverlay::draw(const DebugStats& stats, const HudModel& hud, bool& open,
+                        DebugRequest& request) {
     if (!open) {
         return;
     }
@@ -61,10 +62,84 @@ void DebugOverlay::draw(const DebugStats& stats, const HudModel& hud, bool& open
                 drawStatsPanel(stats, hud);
                 ImGui::EndTabItem();
             }
+            if (ImGui::BeginTabItem("Cheats")) {
+                drawCheatsPanel(stats, request);
+                ImGui::EndTabItem();
+            }
             ImGui::EndTabBar();
         }
     }
     ImGui::End();
+}
+
+void DebugOverlay::drawCheatsPanel(const DebugStats& stats, DebugRequest& request) {
+    ImGui::TextColored(theme::TextDim,
+                       "Playtest shortcuts. These change live game state and\n"
+                       "progression -- they are not part of normal play.");
+    ImGui::Separator();
+
+    ImGui::TextColored(theme::Accent, "MODE");
+    // Bullet hell is gated behind finding every secret, which makes the mode
+    // impossible to iterate on. Starting it from here bypasses the menu lock
+    // without touching the saved progression.
+    if (ImGui::Button("Restart in BULLET HELL", ImVec2(220.0f, 0.0f))) {
+        request.startBulletHell = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Restart in Normal", ImVec2(180.0f, 0.0f))) {
+        request.startNormal = true;
+    }
+    ImGui::TextColored(theme::TextDim, "hitbox %.1f px, graze band to %.1f px, %lld grazes",
+                       stats.hitboxRadius, stats.grazeRadius, stats.grazeCount);
+
+    ImGui::Separator();
+    ImGui::TextColored(theme::Accent, "PROGRESSION");
+    if (ImGui::Button("Unlock all secrets", ImVec2(220.0f, 0.0f))) {
+        request.unlockAllSecrets = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset progress", ImVec2(180.0f, 0.0f))) {
+        request.resetProgress = true;
+    }
+    ImGui::TextColored(theme::TextDim,
+                       "Unlocking writes to the save file and enables the\n"
+                       "Bullet Hell button on the main menu.");
+
+    ImGui::Separator();
+    ImGui::TextColored(theme::Accent, "ENERGY CELLS");
+    if (ImGui::Button("Fill all charge", ImVec2(150.0f, 0.0f))) {
+        request.fillCharge = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Repair all cells", ImVec2(150.0f, 0.0f))) {
+        request.repairAllCells = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Break a cell", ImVec2(130.0f, 0.0f))) {
+        request.breakOneCell = true;
+    }
+    ImGui::TextColored(theme::TextDim,
+                       "Fill charge to test every superweapon tier immediately.");
+
+    ImGui::Separator();
+    ImGui::TextColored(theme::Accent, "LOADOUT");
+    if (ImGui::Button("Grant all weapons at L5", ImVec2(220.0f, 0.0f))) {
+        request.grantAllWeapons = true;
+    }
+
+    ImGui::Separator();
+    ImGui::TextColored(theme::Accent, "WORLD");
+    if (ImGui::Button("Kill all enemies", ImVec2(150.0f, 0.0f))) {
+        request.killAllEnemies = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Skip to boss", ImVec2(150.0f, 0.0f))) {
+        request.skipToBoss = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Toggle invulnerable", ImVec2(180.0f, 0.0f))) {
+        request.toggleInvulnerable = true;
+    }
 }
 
 void DebugOverlay::drawStatsPanel(const DebugStats& stats, const HudModel& hud) {
@@ -97,6 +172,8 @@ void DebugOverlay::drawStatsPanel(const DebugStats& stats, const HudModel& hud) 
     ImGui::Text("5s damage rate %.2f/s   threshold %.2f/s  ->  %s",
                 stats.damageWindowRate, stats.activeThreshold,
                 stats.damageWindowRate > stats.activeThreshold ? "BREAKING HP" : "CHARGING");
+    ImGui::Text("hitbox %.1f px   graze band %.1f-%.1f px   grazes %lld",
+                stats.hitboxRadius, stats.hitboxRadius, stats.grazeRadius, stats.grazeCount);
 
     if (ImGui::BeginTable("##cells", 6,
                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |

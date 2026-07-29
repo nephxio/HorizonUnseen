@@ -35,6 +35,8 @@ namespace hu {
 struct PlayerShip {
     Vector2 position{ 220.0f, 360.0f };
     Vector2 velocity{ 0.0f, 0.0f };
+    // Collision radius. Bullet hell shrinks this dramatically (see
+    // GameWorld::hitboxRadius) so dense patterns stay threadable.
     float radius = 15.0f;
     float hitFlash = 0.0f;
     // Brief mercy invulnerability after a cell breaks, so one bad moment does
@@ -89,6 +91,12 @@ public:
     long long score() const { return m_score; }
     std::size_t enemyCount() const { return m_enemies.size(); }
 
+    // Near-misses this run, and the band they are counted in. Surfaced so the
+    // HUD can show grazing actually paying out.
+    long long grazeCount() const { return m_grazeCount; }
+    float hitboxRadius() const;
+    float grazeRadius() const;
+
     bool playerDead() const { return !m_player.alive; }
     bool levelComplete() const { return m_director.isComplete(); }
 
@@ -100,6 +108,18 @@ public:
 
     // Camera shake offset applied by the renderer/draw list this frame.
     Vector2 shakeOffset() const { return m_shakeOffset; }
+
+    // --- Debug / playtest hooks --------------------------------------------
+    // Driven by the debug console. These deliberately bypass normal progression
+    // so a specific situation can be reached without grinding to it.
+    void debugFillCharge();
+    void debugRepairAllCells();
+    void debugBreakOneCell();
+    void debugGrantAllWeapons();
+    void debugKillAllEnemies();
+    void debugSkipToBoss();
+    void debugToggleInvulnerable();
+    bool debugInvulnerable() const { return m_debugInvulnerable; }
 
     // --- IGameWorld ---------------------------------------------------------
     void spawnPlayerProjectile(const ProjectileSpawn& spawn) override;
@@ -125,6 +145,7 @@ private:
     void updateEnemies(float deltaTime);
     void resolveEnemyDeaths();
     void updateCollisions(float deltaTime);
+    void updateGrazing(float deltaTime);
     void applyBeamDamage(float deltaTime);
     void collectPowerups();
     void damagePlayer(float amount, Vector2 source);
@@ -168,6 +189,13 @@ private:
 
     float m_thrusterTimer = 0.0f;
     bool m_bossDefeatReported = false;
+
+    bool m_debugInvulnerable = false;
+
+    long long m_grazeCount = 0;
+    // Graze effects are throttled: in bullet hell hundreds of near-misses can
+    // land in a second and one burst each would swamp the particle pool.
+    float m_grazeEffectTimer = 0.0f;
 
     std::vector<Notice> m_notices;
 };

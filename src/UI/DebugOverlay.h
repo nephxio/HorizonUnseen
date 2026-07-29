@@ -31,20 +31,48 @@ struct DebugStats {
     float damageWindowRate = 0.0f;
     float activeThreshold = 0.0f;
 
+    // Hitbox/graze geometry, so the tuning can be read at a glance.
+    float hitboxRadius = 0.0f;
+    float grazeRadius = 0.0f;
+    long long grazeCount = 0;
+
     Vector2 playerPosition{ 0.0f, 0.0f };
 };
 
-// Toggled with the backtick key. Shows a filterable view of the log ring buffer
-// plus live counters, so a play session can be diagnosed without a debugger.
+// Actions the debug console can ask the application to perform.
+//
+// The overlay stays pure: it only records what was clicked and the application
+// decides how to carry it out, exactly like the menus do.
+struct DebugRequest {
+    bool startNormal = false;
+    bool startBulletHell = false;    // Bypasses the secret-gated menu button.
+    bool unlockAllSecrets = false;
+    bool resetProgress = false;
+
+    bool fillCharge = false;
+    bool repairAllCells = false;
+    bool breakOneCell = false;
+    bool grantAllWeapons = false;
+
+    bool toggleInvulnerable = false;
+    bool killAllEnemies = false;
+    bool skipToBoss = false;
+};
+
+// Toggled with the backtick key. Shows a filterable view of the log ring buffer,
+// live counters, and playtest shortcuts, so a session can be diagnosed and
+// specific situations reached without a debugger or a grind.
 class DebugOverlay {
 public:
-    void draw(const DebugStats& stats, const HudModel& hud, bool& open);
+    // Any buttons pressed this frame are recorded into `request`.
+    void draw(const DebugStats& stats, const HudModel& hud, bool& open, DebugRequest& request);
 
     bool isLogPaused() const { return m_paused; }
 
 private:
     void drawStatsPanel(const DebugStats& stats, const HudModel& hud);
     void drawLogPanel();
+    void drawCheatsPanel(const DebugStats& stats, DebugRequest& request);
 
     char m_filter[128] = {};
     bool m_paused = false;
