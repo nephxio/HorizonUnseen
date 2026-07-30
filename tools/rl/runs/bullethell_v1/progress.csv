@@ -1,0 +1,4 @@
+update,agent_steps,elapsed_s,steps_per_s,mean_return,mean_score,mean_length,mean_grazes,mean_progress,best_score,policy_loss,value_loss,entropy
+0,4096,3.1,1304.8,nan,nan,nan,nan,nan,0.0,-0.019,0.046,2.8879
+1,8192,6.2,1331.6,nan,nan,nan,nan,nan,0.0,-0.013,0.073,2.8844
+2,12288,9.2,1332.7,nan,nan,nan,nan,nan,0.0,-0.01,0.2328,2.882

@@ -5,4 +5,6 @@ add_subdirectory(Gameplay)
 add_subdirectory(Rendering)
 add_subdirectory(UI)
 
+add_subdirectory(Sim)
+
 add_subdirectory(Apps)

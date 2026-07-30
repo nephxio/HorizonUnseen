@@ -34,6 +34,7 @@ private:
 
     void update(float deltaTime);
     void drawUi();
+    hu::PlayerCommand buildPlayerCommand() const;
 
     // State transitions.
     void startLevel(hu::DifficultyMode mode);

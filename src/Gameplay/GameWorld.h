@@ -14,6 +14,7 @@
 #include "Gameplay/IGameWorld.h"
 #include "Gameplay/Levels/LevelDirector.h"
 #include "Gameplay/Particles/ParticleSystem.h"
+#include "Gameplay/PlayerCommand.h"
 #include "Gameplay/Particles/Starfield.h"
 #include "Gameplay/Power/EnergyCellSystem.h"
 #include "Gameplay/Power/PowerupSystem.h"
@@ -26,8 +27,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
-class InputSystem;
 
 namespace hu {
 
@@ -70,7 +69,8 @@ public:
     bool startLevel(const std::string& levelId, DifficultyMode mode);
     void restart();
 
-    void update(float deltaTime, const InputSystem& input);
+    // The simulation is driven by intent, not by hardware: see PlayerCommand.h.
+    void update(float deltaTime, const PlayerCommand& command);
 
     // Emits the whole scene, sorted by layer and ready to hand to the renderer.
     void buildDrawList(DrawList& out) const;
@@ -141,7 +141,7 @@ public:
     float screenHeight() const override { return m_screenHeight; }
 
 private:
-    void handleInput(float deltaTime, const InputSystem& input);
+    void applyCommand(float deltaTime, const PlayerCommand& command);
     void updateEnemies(float deltaTime);
     void resolveEnemyDeaths();
     void updateCollisions(float deltaTime);

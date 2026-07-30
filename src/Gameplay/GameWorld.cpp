@@ -7,9 +7,6 @@
 #include "Gameplay/Levels/Levels.h"
 #include "Gameplay/Particles/EffectLibrary.h"
 #include "Gameplay/Secrets/SecretRegistry.h"
-#include "Systems/InputSystem.h"
-
-#include <GLFW/glfw3.h>
 
 #include <algorithm>
 #include <cmath>
@@ -164,7 +161,7 @@ void GameWorld::restart() {
 // Frame
 // ---------------------------------------------------------------------------
 
-void GameWorld::update(float deltaTime, const InputSystem& input) {
+void GameWorld::update(float deltaTime, const PlayerCommand& command) {
     // A huge delta (breakpoint, window drag) would tunnel collisions and blow
     // up the damage window, so clamp it.
     deltaTime = std::min(deltaTime, 0.05f);
@@ -172,7 +169,7 @@ void GameWorld::update(float deltaTime, const InputSystem& input) {
     m_levelTime += deltaTime;
 
     if (m_player.alive) {
-        handleInput(deltaTime, input);
+        applyCommand(deltaTime, command);
     } else {
         m_weapons.setFiring(false);
     }
@@ -262,18 +259,13 @@ void GameWorld::update(float deltaTime, const InputSystem& input) {
     updateShake(deltaTime);
 }
 
-void GameWorld::handleInput(float deltaTime, const InputSystem& input) {
+void GameWorld::applyCommand(float deltaTime, const PlayerCommand& command) {
     const GameConfig& cfg = GameConfig::getInstance();
 
-    Vector2 move{ 0.0f, 0.0f };
-    if (input.isKeyPressed(GLFW_KEY_A) || input.isKeyPressed(GLFW_KEY_LEFT))  { move.x -= 1.0f; }
-    if (input.isKeyPressed(GLFW_KEY_D) || input.isKeyPressed(GLFW_KEY_RIGHT)) { move.x += 1.0f; }
-    // World space is y-DOWN (see the projection in shaders/sprite.vert), so
-    // moving up the screen means decreasing y.
-    if (input.isKeyPressed(GLFW_KEY_W) || input.isKeyPressed(GLFW_KEY_UP))    { move.y -= 1.0f; }
-    if (input.isKeyPressed(GLFW_KEY_S) || input.isKeyPressed(GLFW_KEY_DOWN))  { move.y += 1.0f; }
-
-    if (lengthSquared(move) > 0.0f) {
+    // Clamp rather than trust the caller: an agent emitting an unnormalised
+    // vector must not be able to outrun a keyboard player.
+    Vector2 move{ command.moveX, command.moveY };
+    if (lengthSquared(move) > 1.0f) {
         move = normalize(move);
     }
 
@@ -295,17 +287,17 @@ void GameWorld::handleInput(float deltaTime, const InputSystem& input) {
         spawnEffect(fx);
     }
 
-    const bool firing = input.isKeyPressed(GLFW_KEY_SPACE);
     const bool wasFiring = m_weapons.firing();
-    m_weapons.setFiring(firing);
-    if (firing && !wasFiring) {
+    m_weapons.setFiring(command.fire);
+    if (command.fire && !wasFiring) {
         m_secrets.onPlayerFired(m_levelTime);
     }
 
-    if (input.isKeyJustPressed(GLFW_KEY_LEFT_BRACKET))  { m_weapons.cycleWeapon(-1); }
-    if (input.isKeyJustPressed(GLFW_KEY_RIGHT_BRACKET)) { m_weapons.cycleWeapon(1); }
+    if (command.cycleWeapon != 0) {
+        m_weapons.cycleWeapon(command.cycleWeapon);
+    }
 
-    if (input.isKeyJustPressed(GLFW_KEY_LEFT_SHIFT) || input.isKeyJustPressed(GLFW_KEY_RIGHT_SHIFT)) {
+    if (command.fireSuperweapon) {
         m_super.requestFire();
     }
 }

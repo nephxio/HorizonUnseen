@@ -121,7 +121,7 @@ void Application::update(float deltaTime) {
                 break;
             }
 
-            m_world->update(deltaTime, *m_input);
+            m_world->update(deltaTime, buildPlayerCommand());
 
             // Surface gameplay notifications as HUD toasts.
             for (const hu::Notice& notice : m_world->takeNotices()) {
@@ -169,6 +169,29 @@ void Application::update(float deltaTime) {
     } else {
         m_drawList.clear();
     }
+}
+
+// Translates the keyboard into one frame of player intent. This is the only
+// place in the game that maps hardware to gameplay; the simulation itself takes
+// commands and cannot tell a keyboard from an AI agent.
+hu::PlayerCommand Application::buildPlayerCommand() const {
+    hu::PlayerCommand command;
+
+    if (m_input->isKeyPressed(GLFW_KEY_A) || m_input->isKeyPressed(GLFW_KEY_LEFT))  { command.moveX -= 1.0f; }
+    if (m_input->isKeyPressed(GLFW_KEY_D) || m_input->isKeyPressed(GLFW_KEY_RIGHT)) { command.moveX += 1.0f; }
+    // World space is y-down, so moving up the screen decreases y.
+    if (m_input->isKeyPressed(GLFW_KEY_W) || m_input->isKeyPressed(GLFW_KEY_UP))    { command.moveY -= 1.0f; }
+    if (m_input->isKeyPressed(GLFW_KEY_S) || m_input->isKeyPressed(GLFW_KEY_DOWN))  { command.moveY += 1.0f; }
+
+    command.fire = m_input->isKeyPressed(GLFW_KEY_SPACE);
+
+    command.fireSuperweapon = m_input->isKeyJustPressed(GLFW_KEY_LEFT_SHIFT) ||
+                              m_input->isKeyJustPressed(GLFW_KEY_RIGHT_SHIFT);
+
+    if (m_input->isKeyJustPressed(GLFW_KEY_LEFT_BRACKET))  { command.cycleWeapon = -1; }
+    if (m_input->isKeyJustPressed(GLFW_KEY_RIGHT_BRACKET)) { command.cycleWeapon = 1; }
+
+    return command;
 }
 
 // ---------------------------------------------------------------------------
