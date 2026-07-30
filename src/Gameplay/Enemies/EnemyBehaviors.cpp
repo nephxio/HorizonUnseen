@@ -50,6 +50,36 @@ constexpr float kWaveRiderBulletDamage = 9.0f;
 constexpr int kWaveRiderHellFanCount = 3;
 constexpr float kWaveRiderHellFanSpread = 0.55f;
 
+// Bullet hell: braided sine curtain.
+//
+// Each rider fires along both normals of its own wave tangent, so the emission
+// direction sweeps as the rider climbs and dives. Because a formation shares
+// one wave with a per-member phase offset, the riders are at different points
+// of the curve at any instant and their two bullet families cross into a braid.
+//
+// The normals are mostly vertical (the riders travel left), which would leave
+// the bullets drifting up and down out of the player's way, so each is biased
+// leftward. That turns the curtain into something that advances on the player
+// while keeping the sine structure that makes it readable.
+constexpr float kWaveRiderCurtainInterval = 0.07f;
+constexpr float kWaveRiderCurtainDamage = 7.0f;
+constexpr float kWaveRiderCurtainLifetime = 5.0f;
+
+// Fraction of the rider's own velocity each bullet keeps. This is what makes
+// the stream trace the sine path instead of spraying: the bullet leaves along
+// the rider's heading and the heading is the wave. It also carries the bullet
+// leftward toward the player without an artificial bias.
+constexpr float kWaveRiderCurtainInherit = 0.82f;
+
+// Sideways kick away from the flight path, alternating each shot so a single
+// rider lays a zigzag ribbon rather than a straight line.
+constexpr float kWaveRiderCurtainKick = 165.0f;
+
+// Every few shots the rider throws a wider pair to both sides at once, which
+// punctuates the ribbon and gives the formation a visible rhythm.
+constexpr int kWaveRiderCurtainFlourishEvery = 6;
+constexpr float kWaveRiderCurtainFlourishKick = 260.0f;
+
 // --- Diver ------------------------------------------------------------------
 constexpr float kDiverApproachSpeed = 210.0f;
 constexpr float kDiverDiveSpeed = 620.0f;
@@ -115,6 +145,23 @@ constexpr float kOrbiterBulletSpeedHell = 360.0f;
 constexpr float kOrbiterBulletDamage = 9.0f;
 constexpr float kOrbiterTetherAlpha = 0.18f;
 constexpr float kOrbiterTetherSize = 6.0f;
+
+// Bullet hell: spiral arms.
+//
+// Firing radially outward from a point that is itself orbiting traces a spiral,
+// because the emission angle advances with the orbit. Several evenly-spaced
+// arms fired together give the classic rotating pinwheel, and because orbiters
+// counter-rotate on odd formation indices, neighbouring ones lay opposing
+// spirals that cross into an interference lattice.
+//
+// The cadence has to be short or the arm reads as separate bullets instead of a
+// continuous curve, and the bullets have to be slow or the spiral unwinds off
+// screen before its shape is legible.
+constexpr float kOrbiterSpiralInterval = 0.055f;
+constexpr int kOrbiterSpiralArms = 3;
+constexpr float kOrbiterSpiralBulletSpeed = 190.0f;
+constexpr float kOrbiterSpiralDamage = 7.0f;
+constexpr float kOrbiterSpiralLifetime = 4.5f;
 
 // --- Mine -------------------------------------------------------------------
 constexpr float kMineDrift = -62.0f;
@@ -190,6 +237,26 @@ void fire(IGameWorld& world, Vector2 origin, Vector2 direction, const Shot& shot
 
 void fireAngle(IGameWorld& world, Vector2 origin, float angle, const Shot& shot) {
     fire(world, origin, fromAngle(angle), shot);
+}
+
+void fireVelocity(IGameWorld& world, Vector2 origin, Vector2 velocity, const Shot& shot) {
+    const float speed = length(velocity);
+    if (speed < 1.0f) {
+        return;
+    }
+    ProjectileSpawn spawn;
+    spawn.position = origin;
+    spawn.velocity = velocity;
+    spawn.damage = shot.damage;
+    spawn.radius = shot.radius;
+    spawn.lifetime = shot.lifetime;
+    spawn.motion = ProjectileMotion::Straight;
+    spawn.sprite = shot.sprite;
+    spawn.size = shot.size;
+    spawn.tint = shot.tint;
+    spawn.additive = shot.additive;
+    spawn.maxSpeed = speed;
+    world.spawnEnemyProjectile(spawn);
 }
 
 void fireRing(IGameWorld& world, Vector2 origin, int count, float phase, const Shot& shot) {
@@ -327,6 +394,8 @@ void WaveRiderBehavior::onSpawn(EnemyBase& self, const EnemySpawnParams& params)
     // Cadence is shared: derived from the phase, not randomised per member, so
     // a squadron volleys together.
     m_fireTimer = kWaveRiderFireInterval;
+    m_formationIndex = params.formationIndex;
+    m_curtainFlip = (params.formationIndex % 2) == 0;
     self.setVelocity({ -kWaveRiderSpeed * params.speedScale, 0.0f });
 }
 
@@ -350,20 +419,54 @@ void WaveRiderBehavior::update(EnemyBase& self, float dt, IGameWorld& world) {
 
     m_fireTimer -= dt;
     if (m_fireTimer <= 0.0f && onScreenToFire(self, world)) {
-        m_fireTimer = byMode(world, kWaveRiderFireInterval, kWaveRiderFireIntervalHell);
-
-        enemyfire::Shot shot;
-        shot.speed = byMode(world, kWaveRiderBulletSpeed, kWaveRiderBulletSpeedHell);
-        shot.damage = kWaveRiderBulletDamage;
-
-        // WaveRiders shoot straight ahead, not aimed -- dodging the wave is the
-        // puzzle, and aimed fire would make the formation unfair.
-        const Vector2 dir{ -1.0f, 0.0f };
         if (enemyfire::isBulletHell(world)) {
-            enemyfire::fireFan(world, self.position(), dir, kWaveRiderHellFanCount,
-                               kWaveRiderHellFanSpread, shot);
+            // Braided ribbon.
+            //
+            // Each bullet keeps most of the rider's velocity, so it leaves
+            // along the wave and the stream draws the sine curve in the air.
+            // A sideways kick that flips every shot turns that line into a
+            // zigzag, and because the starting side alternates by formation
+            // index while the members sit at different wave phases, the
+            // squadron's ribbons cross into a lattice.
+            m_fireTimer = kWaveRiderCurtainInterval;
+
+            enemyfire::Shot shot;
+            shot.damage = kWaveRiderCurtainDamage;
+            shot.lifetime = kWaveRiderCurtainLifetime;
+
+            const Vector2 velocity{ vx, vy };
+            const Vector2 tangent = normalize(velocity);
+            const Vector2 normal{ -tangent.y, tangent.x };
+            const Vector2 inherited = scale(velocity, kWaveRiderCurtainInherit);
+
+            m_curtainFlip = !m_curtainFlip;
+            const float side = m_curtainFlip ? 1.0f : -1.0f;
+
+            enemyfire::fireVelocity(world, self.position(),
+                                    add(inherited, scale(normal, kWaveRiderCurtainKick * side)),
+                                    shot);
+
+            // Periodic flourish: a wide pair to both sides, giving the ribbon
+            // punctuation instead of a uniform stream.
+            ++m_curtainShot;
+            if (m_curtainShot % kWaveRiderCurtainFlourishEvery == 0) {
+                enemyfire::fireVelocity(
+                    world, self.position(),
+                    add(inherited, scale(normal, kWaveRiderCurtainFlourishKick)), shot);
+                enemyfire::fireVelocity(
+                    world, self.position(),
+                    add(inherited, scale(normal, -kWaveRiderCurtainFlourishKick)), shot);
+            }
         } else {
-            enemyfire::fire(world, self.position(), dir, shot);
+            m_fireTimer = kWaveRiderFireInterval;
+
+            enemyfire::Shot shot;
+            shot.speed = kWaveRiderBulletSpeed;
+            shot.damage = kWaveRiderBulletDamage;
+
+            // WaveRiders shoot straight ahead, not aimed -- dodging the wave is
+            // the puzzle, and aimed fire would make the formation unfair.
+            enemyfire::fire(world, self.position(), Vector2{ -1.0f, 0.0f }, shot);
         }
     }
 }
@@ -694,20 +797,31 @@ void OrbiterBehavior::update(EnemyBase& self, float dt, IGameWorld& world) {
 
     m_fireTimer -= dt;
     if (m_fireTimer <= 0.0f && onScreenToFire(self, world)) {
-        m_fireTimer = byMode(world, kOrbiterFireInterval, kOrbiterFireIntervalHell);
-
-        enemyfire::Shot shot;
-        shot.speed = byMode(world, kOrbiterBulletSpeed, kOrbiterBulletSpeedHell);
-        shot.damage = kOrbiterBulletDamage;
-
-        // Tangent to the orbit at the current angle.
-        const float tangent = m_angle + (m_angularSpeed >= 0.0f ? Pi * 0.5f : -Pi * 0.5f);
         if (enemyfire::isBulletHell(world)) {
-            // Both tangents plus the outward normal: a pinwheel.
-            enemyfire::fireAngle(world, next, tangent, shot);
-            enemyfire::fireAngle(world, next, tangent + Pi, shot);
-            enemyfire::fireAngle(world, next, m_angle, shot);
+            // Spiral arms: emit radially outward on a fast cadence. The orbit
+            // advances the emission angle for us, so successive shots lay a
+            // curve rather than a line.
+            m_fireTimer = kOrbiterSpiralInterval;
+
+            enemyfire::Shot shot;
+            shot.speed = kOrbiterSpiralBulletSpeed;
+            shot.damage = kOrbiterSpiralDamage;
+            shot.lifetime = kOrbiterSpiralLifetime;
+
+            const float armStep = TwoPi / static_cast<float>(kOrbiterSpiralArms);
+            for (int arm = 0; arm < kOrbiterSpiralArms; ++arm) {
+                enemyfire::fireAngle(world, next,
+                                     m_angle + armStep * static_cast<float>(arm), shot);
+            }
         } else {
+            m_fireTimer = kOrbiterFireInterval;
+
+            enemyfire::Shot shot;
+            shot.speed = kOrbiterBulletSpeed;
+            shot.damage = kOrbiterBulletDamage;
+
+            // Tangent to the orbit at the current angle.
+            const float tangent = m_angle + (m_angularSpeed >= 0.0f ? Pi * 0.5f : -Pi * 0.5f);
             enemyfire::fireAngle(world, next, tangent, shot);
         }
     }

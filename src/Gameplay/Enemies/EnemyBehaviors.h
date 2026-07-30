@@ -45,6 +45,11 @@ void fire(IGameWorld& world, Vector2 origin, Vector2 direction, const Shot& shot
 // Fires one bullet at a fixed angle in radians.
 void fireAngle(IGameWorld& world, Vector2 origin, float angle, const Shot& shot);
 
+// Fires with an explicit velocity vector rather than a direction plus the
+// shot's speed. Used by patterns that inherit part of the firer's own motion,
+// so the bullet stream traces the path the enemy is travelling.
+void fireVelocity(IGameWorld& world, Vector2 origin, Vector2 velocity, const Shot& shot);
+
 // Evenly spaced ring of `count` bullets, rotated by `phase` radians.
 void fireRing(IGameWorld& world, Vector2 origin, int count, float phase, const Shot& shot);
 
@@ -96,6 +101,13 @@ private:
     float m_amplitude = 0.0f;
     float m_wavePhase = 0.0f;
     float m_fireTimer = 0.0f;
+
+    // Bullet-hell curtain state. Successive shots alternate which side of the
+    // flight path they are thrown to, and the starting side alternates by
+    // formation index, so neighbouring riders weave in opposition.
+    int m_formationIndex = 0;
+    bool m_curtainFlip = false;
+    int m_curtainShot = 0;
 };
 
 // ---------------------------------------------------------------------------
