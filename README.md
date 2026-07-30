@@ -106,6 +106,19 @@ Eight archetypes, each with its own movement and weapon: **Drifter** (fodder),
 **Orbiter** (traces a cycloid, fires tangentially), **Mine** (detonates into a bullet
 ring), and a three-phase **Boss**.
 
+### Grazing
+
+A bullet that passes close without hitting you awards energy charge. This is
+what keeps the cell economy working under heavy fire: dense patterns would
+otherwise pin you permanently over the damage threshold, turning a risk/reward
+system into pure attrition. Grazing means more bullets on screen translates into
+more superweapon fuel, and rewards flying *into* danger rather than away from it.
+
+In Bullet Hell the ship's hitbox shrinks to a few pixels — far smaller than the
+sprite — and is drawn as a bright pulsing core, ringed by the graze band. Dense
+patterns are only fair when you can thread a gap the ship appears not to fit
+through.
+
 ### Secrets and Bullet Hell
 
 Each level defines secrets with conditions such as reaching a hidden location, destroying
@@ -113,9 +126,14 @@ specific enemies within a time limit, surviving a window without damage, passing
 a stretch without firing, or collecting power-ups in a set order.
 
 Finding **every secret in every level** unlocks Bullet Hell mode on the main menu, where
-enemies fire far denser patterns. The unlock is derived by walking the level and secret
-registries, so adding a level automatically raises the requirement — no other code needs
-to change.
+every enemy keeps its identity but fires a far denser pattern — orbiter spirals, wave-rider
+ribbons, turret lighthouse sweeps, mine double-detonations, splitter cascades, and a boss
+counter-spiral. The unlock is derived by walking the level and secret registries, so adding
+a level automatically raises the requirement — no other code needs to change.
+
+> **Playtest builds** set `DevAlwaysUnlockBulletHell` in `src/Application.cpp` to open the
+> mode from the menu without earning it, so it can be tested. Progression is still tracked
+> underneath and the button is labelled accordingly. Set it to `false` for a real release.
 
 ## Adding a level
 

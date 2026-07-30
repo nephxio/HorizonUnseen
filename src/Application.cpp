@@ -20,13 +20,16 @@ constexpr const char* LogCat = "App";
 // only the entry point into it.
 constexpr const char* StartingLevelId = "test_level";
 
-// DEV ONLY -- set to false before shipping.
+// Forces the Bullet Hell button open on the main menu regardless of how many
+// secrets have been found.
 //
-// Forces the Bullet Hell button on the main menu regardless of how many secrets
-// have been found, so the mode can be playtested without completing the game
-// first. Real progression is still tracked and saved underneath; this only
-// overrides the menu gate, and the button is relabelled so an unlocked-by-cheat
-// build is never mistaken for a legitimately unlocked one.
+// Deliberately ON for playtest builds: the mode is the part that most needs
+// outside feedback, and gating it behind finding every secret means almost
+// nobody would reach it. Real progression is still tracked and saved
+// underneath -- this only overrides the menu gate, and the button is relabelled
+// so it is clear the mode was opened for testing rather than earned.
+//
+// Set to false for a real release, once the secrets are meant to be the way in.
 constexpr bool DevAlwaysUnlockBulletHell = true;
 
 hu::ToastKind toToastKind(hu::NoticeKind kind) {

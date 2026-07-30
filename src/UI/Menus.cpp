@@ -115,9 +115,9 @@ MenuAction Menus::drawMainMenu(const ProgressModel& progress, float viewportWidt
     const bool unlocked = progress.bulletHellUnlocked;
     char bulletHellLabel[96];
     if (progress.devUnlockedBulletHell) {
-        // Never let a dev-forced unlock look like a real one.
-        std::snprintf(bulletHellLabel, sizeof(bulletHellLabel), "BULLET HELL  [DEV %d/%d]",
-                      progress.totalFound, progress.totalSecrets);
+        // Opened for testing rather than earned. Say so plainly instead of
+        // showing a locked-looking label a playtester would read as a bug.
+        std::snprintf(bulletHellLabel, sizeof(bulletHellLabel), "BULLET HELL  [UNLOCKED FOR TESTING]");
     } else if (unlocked) {
         std::snprintf(bulletHellLabel, sizeof(bulletHellLabel), "BULLET HELL MODE");
     } else {
@@ -127,7 +127,8 @@ MenuAction Menus::drawMainMenu(const ProgressModel& progress, float viewportWidt
 
     if (menuButton(bulletHellLabel, unlocked,
                    progress.devUnlockedBulletHell
-                       ? "Dev override: not actually unlocked yet."
+                       ? "Open for playtesting. Normally you earn this by finding every secret.\n"
+                         "Tiny hitbox, dense patterns -- near-misses charge your cells."
                        : unlocked ? "Every secret found. Good luck."
                                   : "Find every secret in every level to unlock.")) {
         action = MenuAction::StartBulletHell;
