@@ -114,7 +114,11 @@ MenuAction Menus::drawMainMenu(const ProgressModel& progress, float viewportWidt
     // Bullet hell is the reward for finding every secret in every level.
     const bool unlocked = progress.bulletHellUnlocked;
     char bulletHellLabel[96];
-    if (unlocked) {
+    if (progress.devUnlockedBulletHell) {
+        // Never let a dev-forced unlock look like a real one.
+        std::snprintf(bulletHellLabel, sizeof(bulletHellLabel), "BULLET HELL  [DEV %d/%d]",
+                      progress.totalFound, progress.totalSecrets);
+    } else if (unlocked) {
         std::snprintf(bulletHellLabel, sizeof(bulletHellLabel), "BULLET HELL MODE");
     } else {
         std::snprintf(bulletHellLabel, sizeof(bulletHellLabel), "BULLET HELL  [LOCKED %d/%d]",
@@ -122,8 +126,10 @@ MenuAction Menus::drawMainMenu(const ProgressModel& progress, float viewportWidt
     }
 
     if (menuButton(bulletHellLabel, unlocked,
-                   unlocked ? "Every secret found. Good luck."
-                            : "Find every secret in every level to unlock.")) {
+                   progress.devUnlockedBulletHell
+                       ? "Dev override: not actually unlocked yet."
+                       : unlocked ? "Every secret found. Good luck."
+                                  : "Find every secret in every level to unlock.")) {
         action = MenuAction::StartBulletHell;
     }
 

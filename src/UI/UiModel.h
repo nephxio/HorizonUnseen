@@ -8,6 +8,7 @@
 // gameplay refactor cannot ripple into the HUD.
 
 #include "Core/GameTypes.h"
+#include "Game/Entity.h"   // Vector2
 
 #include <cstddef>
 #include <string>
@@ -29,6 +30,18 @@ struct WeaponView {
     WeaponType type = WeaponType::Bullet;
     int level = 1;
     bool unlocked = false;
+};
+
+// A floating label drawn next to a power-up on the field.
+//
+// Icons alone do not survive being small, tinted and in motion -- players could
+// see that something dropped but not what it was. The name is drawn in world
+// space instead, which is unambiguous regardless of art.
+struct PowerupLabel {
+    Vector2 position{ 0.0f, 0.0f };   // World pixels; maps 1:1 to screen.
+    std::string text;
+    PowerupType type = PowerupType::EnergyCharge;
+    float alpha = 1.0f;               // Follows the pickup's expiry blink.
 };
 
 struct HudModel {
@@ -56,6 +69,9 @@ struct HudModel {
     // so this doubles as a readout of how much superweapon fuel the player is
     // earning by flying close.
     long long grazeCount = 0;
+
+    // Power-ups currently on the field, labelled by name.
+    std::vector<PowerupLabel> powerupLabels;
 
     bool bossActive = false;
     float bossHealth01 = 0.0f;
@@ -100,6 +116,9 @@ struct ProgressModel {
     int totalFound = 0;
     int totalSecrets = 0;
     bool bulletHellUnlocked = false;
+    // True when the unlock came from the dev override rather than from actually
+    // finding every secret, so the menu can label it honestly.
+    bool devUnlockedBulletHell = false;
 };
 
 // What the menus ask the application to do. The menu widgets are pure: they

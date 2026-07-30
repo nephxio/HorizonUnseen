@@ -873,6 +873,29 @@ void GameWorld::clearScreen(float bossDamage) {
     int cleared = 0;
     int bossesHit = 0;
 
+    // The Energy Bomb wipes incoming fire as well as enemies. At five cells it
+    // is the most expensive thing the player can spend, and in bullet hell the
+    // screen is far more likely to kill them than the enemies laying it -- so
+    // clearing only the shooters would leave the panic button useless in
+    // exactly the moment it exists for.
+    int bulletsCleared = 0;
+    for (Projectile& shot : m_projectiles.enemyProjectiles()) {
+        if (!shot.alive()) {
+            continue;
+        }
+        // Scatter a few sparks where each bullet was, so the wipe reads as the
+        // bomb annihilating them rather than the bullets blinking out.
+        if ((bulletsCleared % 6) == 0) {
+            EffectRequest spark;
+            spark.kind = EffectKind::Impact;
+            spark.position = shot.position();
+            spark.scale = 0.5f;
+            spawnEffect(spark);
+        }
+        shot.kill();
+        ++bulletsCleared;
+    }
+
     for (auto& enemy : m_enemies) {
         if (!enemy->isAlive()) {
             continue;
@@ -894,7 +917,8 @@ void GameWorld::clearScreen(float bossDamage) {
     spawnEffect(fx);
 
     addScreenShake(24.0f, 0.8f);
-    HU_LOG_INFO(LogCat, "Energy Bomb: cleared %d enemies, damaged %d boss(es)", cleared, bossesHit);
+    HU_LOG_INFO(LogCat, "Energy Bomb: cleared %d enemies, %d bullets, damaged %d boss(es)",
+                cleared, bulletsCleared, bossesHit);
 }
 
 void GameWorld::addScreenShake(float intensity, float duration) {

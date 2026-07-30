@@ -25,6 +25,7 @@ private:
     void drawSuperweaponReadout(const HudModel& model, float x, float y);
     void drawDamagePressure(const HudModel& model, float x, float y, float width);
     void drawLevelProgress(const HudModel& model, float viewportWidth);
+    void drawPowerupLabels(const HudModel& model);
     void drawBossBar(const HudModel& model, float viewportWidth, float viewportHeight);
     void drawToasts(float viewportWidth, float viewportHeight);
 

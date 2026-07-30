@@ -162,6 +162,13 @@ private:
     Vector2 m_lastPlayerPos{ 0.0f, 0.0f };
     Vector2 m_playerVelocity{ 0.0f, 0.0f };
     bool m_hasPlayerSample = false;
+
+    // Bullet-hell lighthouse sweep. Runs independently of the aimed shot, and
+    // its direction alternates by formation index so a row of turrets sweeps in
+    // opposition.
+    float m_sweepAngle = 0.0f;
+    float m_sweepTimer = 0.0f;
+    float m_sweepDirection = 1.0f;
 };
 
 // ---------------------------------------------------------------------------
@@ -188,6 +195,8 @@ class SplitterChildBehavior final : public IEnemyBehavior {
 public:
     void onSpawn(EnemyBase& self, const EnemySpawnParams& params) override;
     void update(EnemyBase& self, float dt, IGameWorld& world) override;
+    // Bullet hell only: lays a small ring, continuing the parent's cascade.
+    void onDeath(EnemyBase& self, IGameWorld& world) override;
     const char* name() const override { return "SplitterChild"; }
 
 private:

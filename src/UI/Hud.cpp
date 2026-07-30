@@ -67,6 +67,7 @@ void Hud::draw(const HudModel& model, float viewportWidth, float viewportHeight,
         drawWeaponBar(model, Margin, Margin + CellHeight + 58.0f);
         drawSuperweaponReadout(model, Margin + cellsWidth + 28.0f, Margin);
         drawLevelProgress(model, viewportWidth);
+        drawPowerupLabels(model);
         drawBossBar(model, viewportWidth, viewportHeight);
         drawToasts(viewportWidth, viewportHeight);
     }
@@ -276,6 +277,46 @@ void Hud::drawLevelProgress(const HudModel& model, float viewportWidth) {
                   model.score, model.grazeCount, model.secretsFound, model.secretsTotal);
     const ImVec2 statsSize = ImGui::CalcTextSize(stats);
     dl->AddText(ImVec2(x + width - statsSize.x, barY + 12.0f), toU32(theme::TextDim), stats);
+}
+
+// Names each power-up on the field. World pixels map 1:1 to screen pixels in
+// this projection, so the pickup's world position is its screen position.
+void Hud::drawPowerupLabels(const HudModel& model) {
+    if (model.powerupLabels.empty()) {
+        return;
+    }
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    for (const PowerupLabel& label : model.powerupLabels) {
+        if (label.text.empty() || label.alpha <= 0.01f) {
+            continue;
+        }
+
+        ImVec4 color;
+        switch (label.type) {
+            case PowerupType::WeaponSpread:  color = theme::weaponColor(1); break;
+            case PowerupType::WeaponMissile: color = theme::weaponColor(2); break;
+            case PowerupType::WeaponLaser:   color = theme::weaponColor(3); break;
+            case PowerupType::BulletUpgrade: color = theme::weaponColor(0); break;
+            case PowerupType::CellRepair:    color = theme::Health;         break;
+            case PowerupType::EnergyCharge:  color = theme::Charge;         break;
+            default:                         color = theme::TextDim;        break;
+        }
+
+        const ImVec2 size = ImGui::CalcTextSize(label.text.c_str());
+        // Centred just below the pickup so the icon itself stays unobscured.
+        const ImVec2 pos(label.position.x - size.x * 0.5f, label.position.y + 20.0f);
+
+        // Dark plate behind the text: the field can be bright with additive
+        // bullets, and unbacked text disappears into it.
+        dl->AddRectFilled(ImVec2(pos.x - 4.0f, pos.y - 2.0f),
+                          ImVec2(pos.x + size.x + 4.0f, pos.y + size.y + 2.0f),
+                          ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 0.0f, 0.55f * label.alpha)),
+                          3.0f);
+        dl->AddText(pos, ImGui::GetColorU32(theme::withAlpha(color, label.alpha)),
+                    label.text.c_str());
+    }
 }
 
 void Hud::drawBossBar(const HudModel& model, float viewportWidth, float viewportHeight) {

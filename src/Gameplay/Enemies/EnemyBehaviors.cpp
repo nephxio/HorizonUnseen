@@ -114,6 +114,20 @@ constexpr float kTurretBarrelWidth = 9.0f;
 constexpr int kTurretHellSalvo = 3;
 constexpr float kTurretHellSalvoSpread = 0.24f;
 
+// Bullet hell: lighthouse sweep.
+//
+// Turrets are bolted to the scrolling world, so a steadily rotating emitter
+// becomes a fixed hazard the player scrolls into rather than one that chases
+// them. The full rotation matters: the half-turn pointing away is the breathing
+// room that makes the half pointing at you survivable. This runs alongside the
+// existing telegraphed aimed shot, which stays the thing that punishes standing
+// still in a safe wedge.
+constexpr float kTurretSweepRate = 1.5f;         // radians/second
+constexpr float kTurretSweepInterval = 0.075f;
+constexpr float kTurretSweepBulletSpeed = 215.0f;
+constexpr float kTurretSweepDamage = 8.0f;
+constexpr int kTurretSweepArms = 2;              // Opposed arms: a bar, not a spoke.
+
 // --- Splitter ---------------------------------------------------------------
 constexpr float kSplitterSpeed = 78.0f;
 constexpr float kSplitterWobbleAmplitude = 26.0f;
@@ -128,6 +142,18 @@ constexpr float kSplitterLobIntervalHell = 1.5f;
 constexpr float kSplitterLobSpeed = 190.0f;
 constexpr float kSplitterLobDamage = 12.0f;
 constexpr int kSplitterLobRingCount = 6;
+
+// Bullet hell: cascading rings.
+//
+// The parent lays a ring as it bursts, and every child lays a smaller one when
+// it dies in turn, so clearing a splitter cluster sets off a chain rather than
+// a single event. Rings are rotated off each other so the layers do not
+// overlap into a solid wall.
+constexpr int kSplitterDeathRingCount = 14;
+constexpr float kSplitterDeathRingSpeed = 205.0f;
+constexpr int kSplitterChildDeathRingCount = 8;
+constexpr float kSplitterChildDeathRingSpeed = 175.0f;
+constexpr float kSplitterCascadeDamage = 10.0f;
 
 // --- Splitter child ---------------------------------------------------------
 constexpr float kChildDrag = 0.9f;            // Per second, multiplicative.
@@ -176,6 +202,19 @@ constexpr float kMineRingSpeed = 240.0f;
 constexpr float kMineRingSpeedHell = 300.0f;
 constexpr float kMineRingDamage = 12.0f;
 constexpr float kMineGlowScale = 2.1f;
+
+// Bullet hell: double detonation.
+//
+// Two concentric rings released together but travelling at different speeds,
+// the inner one offset by half a step so it threads the gaps of the outer as it
+// overtakes. Reading the first ring's gaps is not enough -- the second one
+// closes them, so the player has to move rather than sit in a slot. Expressing
+// it as a speed difference rather than a delayed second blast means the mine
+// does not need to outlive its own death.
+constexpr int kMineOuterRingCount = 20;
+constexpr float kMineOuterRingSpeed = 190.0f;
+constexpr int kMineInnerRingCount = 20;
+constexpr float kMineInnerRingSpeed = 330.0f;
 
 // ---------------------------------------------------------------------------
 // Local helpers
@@ -586,6 +625,11 @@ void DiverBehavior::appendDraw(const EnemyBase& self, DrawList& out) const {
 
 void TurretBehavior::onSpawn(EnemyBase& self, const EnemySpawnParams& params) {
     m_fireTimer = kTurretFireInterval * 0.6f + params.phase;
+    // Alternate sweep direction down a row of turrets so their arms scissor
+    // past each other instead of rotating in lockstep, and stagger the starting
+    // angle so the gaps do not all line up.
+    m_sweepDirection = (params.formationIndex % 2) == 0 ? 1.0f : -1.0f;
+    m_sweepAngle = params.phase + static_cast<float>(params.formationIndex) * 0.9f;
     self.setVelocity({ -params.worldScrollSpeed, 0.0f });
 }
 
@@ -613,6 +657,30 @@ void TurretBehavior::update(EnemyBase& self, float dt, IGameWorld& world) {
     const Vector2 lead = enemyfire::leadTarget(self.position(), playerPos, m_playerVelocity,
                                                bulletSpeed);
     m_barrelAngle = rotateTowards(m_barrelAngle, angleOf(lead), kTurretBarrelTurnRate * dt);
+
+    // Lighthouse sweep runs on its own clock, independent of the aimed shot, so
+    // it keeps turning through the telegraph and the recovery.
+    if (enemyfire::isBulletHell(world)) {
+        m_sweepAngle += kTurretSweepRate * m_sweepDirection * dt;
+
+        m_sweepTimer -= dt;
+        if (m_sweepTimer <= 0.0f && onScreenToFire(self, world)) {
+            m_sweepTimer = kTurretSweepInterval;
+
+            enemyfire::Shot sweep;
+            sweep.speed = kTurretSweepBulletSpeed;
+            sweep.damage = kTurretSweepDamage;
+            sweep.radius = 5.0f;
+            sweep.size = { 13.0f, 9.0f };
+            sweep.tint = Color{ 1.0f, 0.75f, 0.45f, 1.0f };
+
+            const float armStep = TwoPi / static_cast<float>(kTurretSweepArms);
+            for (int arm = 0; arm < kTurretSweepArms; ++arm) {
+                enemyfire::fireAngle(world, self.position(),
+                                     m_sweepAngle + armStep * static_cast<float>(arm), sweep);
+            }
+        }
+    }
 
     if (m_chargeTimer > 0.0f) {
         m_chargeTimer -= dt;
@@ -731,6 +799,20 @@ void SplitterBehavior::onDeath(EnemyBase& self, IGameWorld& world) {
         self.spawnChild(EnemyFactory::createSplitterChild(params));
     }
 
+    // Cascade: the burst itself lays a ring, and each child will lay another
+    // when it dies, so clearing a cluster chains instead of resolving at once.
+    if (enemyfire::isBulletHell(world)) {
+        enemyfire::Shot ring;
+        ring.speed = kSplitterDeathRingSpeed;
+        ring.damage = kSplitterCascadeDamage;
+        ring.radius = 6.0f;
+        ring.size = { 14.0f, 14.0f };
+        ring.tint = Color{ 0.55f, 1.0f, 0.6f, 1.0f };
+        ring.additive = true;
+        enemyfire::fireRing(world, self.position(), kSplitterDeathRingCount,
+                            base + step * 0.5f, ring);
+    }
+
     HU_LOG_DEBUG(kLogCategory, "Splitter burst into %d children at (%.0f, %.0f)", count,
                  self.position().x, self.position().y);
     world.addScreenShake(0.25f, 0.18f);
@@ -747,6 +829,23 @@ void SplitterChildBehavior::onSpawn(EnemyBase& self, const EnemySpawnParams& par
     m_scatterVelocity = params.initialVelocity;
     m_spin = params.phase;
     self.setVelocity(m_scatterVelocity);
+}
+
+void SplitterChildBehavior::onDeath(EnemyBase& self, IGameWorld& world) {
+    if (!enemyfire::isBulletHell(world)) {
+        return;
+    }
+
+    enemyfire::Shot ring;
+    ring.speed = kSplitterChildDeathRingSpeed;
+    ring.damage = kSplitterCascadeDamage;
+    ring.radius = 5.0f;
+    ring.size = { 12.0f, 12.0f };
+    ring.tint = Color{ 0.7f, 1.0f, 0.75f, 1.0f };
+    ring.additive = true;
+
+    enemyfire::fireRing(world, self.position(), kSplitterChildDeathRingCount,
+                        randomRange(0.0f, TwoPi), ring);
 }
 
 void SplitterChildBehavior::update(EnemyBase& self, float dt, IGameWorld&) {
@@ -884,16 +983,34 @@ void MineBehavior::onDeath(EnemyBase& self, IGameWorld& world) {
     }
     m_detonated = true;
 
-    const int count = static_cast<int>(byMode(world, kMineRingCount, kMineRingCountHell));
     enemyfire::Shot shot;
-    shot.speed = byMode(world, kMineRingSpeed, kMineRingSpeedHell);
     shot.damage = kMineRingDamage;
     shot.radius = 6.0f;
     shot.size = { 14.0f, 14.0f };
     shot.tint = Color{ 1.0f, 0.6f, 0.35f, 1.0f };
     shot.additive = true;
 
-    enemyfire::fireRing(world, self.position(), count, randomRange(0.0f, TwoPi), shot);
+    const float phase = randomRange(0.0f, TwoPi);
+    int count = 0;
+
+    if (enemyfire::isBulletHell(world)) {
+        // Slow outer ring first, then a faster one rotated half a step so it
+        // overtakes through the outer ring's gaps.
+        shot.speed = kMineOuterRingSpeed;
+        enemyfire::fireRing(world, self.position(), kMineOuterRingCount, phase, shot);
+
+        const float halfStep = Pi / static_cast<float>(kMineInnerRingCount);
+        shot.speed = kMineInnerRingSpeed;
+        shot.tint = Color{ 1.0f, 0.85f, 0.45f, 1.0f };
+        enemyfire::fireRing(world, self.position(), kMineInnerRingCount, phase + halfStep, shot);
+
+        count = kMineOuterRingCount + kMineInnerRingCount;
+    } else {
+        count = static_cast<int>(kMineRingCount);
+        shot.speed = kMineRingSpeed;
+        enemyfire::fireRing(world, self.position(), count, phase, shot);
+    }
+
     world.addScreenShake(0.4f, 0.22f);
 
     HU_LOG_DEBUG(kLogCategory, "Mine detonated: %d bullets at (%.0f, %.0f)", count,

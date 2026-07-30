@@ -20,6 +20,15 @@ constexpr const char* LogCat = "App";
 // only the entry point into it.
 constexpr const char* StartingLevelId = "test_level";
 
+// DEV ONLY -- set to false before shipping.
+//
+// Forces the Bullet Hell button on the main menu regardless of how many secrets
+// have been found, so the mode can be playtested without completing the game
+// first. Real progression is still tracked and saved underneath; this only
+// overrides the menu gate, and the button is relabelled so an unlocked-by-cheat
+// build is never mistaken for a legitimately unlocked one.
+constexpr bool DevAlwaysUnlockBulletHell = true;
+
 hu::ToastKind toToastKind(hu::NoticeKind kind) {
     switch (kind) {
         case hu::NoticeKind::Secret:  return hu::ToastKind::Secret;
@@ -383,6 +392,25 @@ void Application::buildHudModel() {
     m_hudModel.secretsTotal = static_cast<int>(hu::SaveGame::instance().secretsTotalInLevel(levelId));
     m_hudModel.grazeCount = m_world->grazeCount();
 
+    // Label every pickup on the field by name. The icons alone were not
+    // distinguishable in motion.
+    m_hudModel.powerupLabels.clear();
+    for (const hu::Powerup& pickup : m_world->powerups().pickups()) {
+        if (!pickup.alive) {
+            continue;
+        }
+        hu::PowerupLabel label;
+        label.position = pickup.position;
+        label.text = hu::powerupName(pickup.type);
+        label.type = pickup.type;
+        // Fade the label out with the pickup's own expiry blink.
+        const float remaining = pickup.lifetime - pickup.age;
+        label.alpha = (pickup.lifetime > 0.0f && remaining < 1.5f)
+                          ? std::max(0.0f, remaining / 1.5f)
+                          : 1.0f;
+        m_hudModel.powerupLabels.push_back(std::move(label));
+    }
+
     float bossHealth = 0.0f;
     m_hudModel.bossActive = m_world->bossStatus(bossHealth);
     m_hudModel.bossHealth01 = bossHealth;
@@ -398,6 +426,15 @@ void Application::buildProgressModel() {
     m_progressModel.totalFound = static_cast<int>(save.secretsFoundTotal());
     m_progressModel.totalSecrets = static_cast<int>(save.secretsTotal());
     m_progressModel.bulletHellUnlocked = save.bulletHellUnlocked();
+
+    if (DevAlwaysUnlockBulletHell && !m_progressModel.bulletHellUnlocked) {
+        m_progressModel.bulletHellUnlocked = true;
+        m_progressModel.devUnlockedBulletHell = true;
+        HU_LOG_DEBUG(LogCat, "DEV: bullet hell force-unlocked on the menu (%d/%d secrets found)",
+                     m_progressModel.totalFound, m_progressModel.totalSecrets);
+    } else {
+        m_progressModel.devUnlockedBulletHell = false;
+    }
 
     // Driven entirely off the registries, so a new level appears here with no
     // change to this function.

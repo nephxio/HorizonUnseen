@@ -12,7 +12,9 @@ namespace {
 
 constexpr float PickupRadius = 22.0f;
 constexpr float PlayerPickupRadius = 26.0f;
-constexpr Vector2 PickupSize{ 28.0f, 28.0f };
+// Drawn larger than the 28x28 source art: pickups compete with dense bullet
+// patterns for attention and were easy to miss entirely at native size.
+constexpr Vector2 PickupSize{ 38.0f, 38.0f };
 constexpr float PickupLifetime = 14.0f;
 constexpr float PickupDriftScale = 0.6f;    // Fraction of the scroll speed.
 constexpr float PickupBobAmplitude = 14.0f; // Pixels.
