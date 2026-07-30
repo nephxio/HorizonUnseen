@@ -55,14 +55,34 @@ constexpr int kMaxStepsPerEpisode = 20000;
 
 // --- Reward shaping --------------------------------------------------------
 //
-// Score is the objective, so it dominates. The rest are small nudges that make
-// the signal less sparse: without them the agent gets no feedback at all until
-// it happens to shoot something.
+// Score alone turned out to be a poor teacher. A random policy already scores
+// ~16k and nearly finishes the level, because score accrues passively: the gun
+// is always firing, enemies wander into it, and grazing pays out just for being
+// near bullets. Two million steps of PPO moved the score 26% but left the
+// policy almost perfectly uniform (entropy 2.678 of a possible 2.890), which is
+// what "movement barely affects the outcome" looks like from the inside.
+//
+// The fix is to make getting hit expensive on every single frame rather than
+// only when a cell finally breaks. Cell hit points are the densest skill signal
+// the game has: they respond to each individual bullet, so dodging produces an
+// immediate, attributable gradient.
 constexpr float kScoreRewardScale = 0.01f;
-constexpr float kSurvivalRewardPerStep = 0.01f;
-constexpr float kDeathPenalty = -5.0f;
-constexpr float kCellBreakPenalty = -1.5f;
-constexpr float kLevelCompleteBonus = 25.0f;
+
+// Per point of cell health lost. Tuned so a serious hit outweighs several
+// seconds of passive score, which is what forces the agent to care.
+constexpr float kHealthLossPenalty = -0.08f;
+
+// Survival is still worth something, but much less than before: rewarding
+// existence was part of what made standing still viable.
+constexpr float kSurvivalRewardPerStep = 0.002f;
+
+constexpr float kDeathPenalty = -10.0f;
+constexpr float kCellBreakPenalty = -3.0f;
+
+// Finishing is worth more the more of the ship is left, so the agent is pushed
+// toward completing well rather than merely completing.
+constexpr float kLevelCompleteBonus = 20.0f;
+constexpr float kLevelCompletePerCell = 8.0f;
 
 struct MoveVector {
     float x, y;
@@ -88,6 +108,7 @@ struct SimEnv {
 
     long long lastScore = 0;
     std::size_t lastBrokenCells = 0;
+    float lastTotalHealth = 0.0f;
     int steps = 0;
     bool done = false;
 
@@ -246,6 +267,7 @@ HU_SIM_API void huSimReset(HuSimHandle handle, float* observation) {
                                                : DifficultyMode::Normal);
     env->lastScore = 0;
     env->lastBrokenCells = 0;
+    env->lastTotalHealth = env->world.cells().totalHealth();
     env->steps = 0;
     env->done = false;
     env->superLatched = false;
@@ -320,6 +342,16 @@ HU_SIM_API float huSimStep(HuSimHandle handle,
 
     reward += kSurvivalRewardPerStep;
 
+    // The dense skill term: every point of cell health lost is punished, so a
+    // single bullet dodged is immediately attributable to the action that
+    // dodged it.
+    const float totalHealth = env->world.cells().totalHealth();
+    const float healthLost = env->lastTotalHealth - totalHealth;
+    if (healthLost > 0.0f) {
+        reward += kHealthLossPenalty * healthLost;
+    }
+    env->lastTotalHealth = totalHealth;
+
     const std::size_t broken = env->world.cells().brokenCellCount();
     if (broken > env->lastBrokenCells) {
         reward += kCellBreakPenalty * static_cast<float>(broken - env->lastBrokenCells);
@@ -330,7 +362,9 @@ HU_SIM_API float huSimStep(HuSimHandle handle,
         reward += kDeathPenalty;
         env->done = true;
     } else if (env->world.levelComplete()) {
-        reward += kLevelCompleteBonus;
+        const std::size_t cellsAlive =
+            EnergyCellSystem::CellCount - env->world.cells().brokenCellCount();
+        reward += kLevelCompleteBonus + kLevelCompletePerCell * static_cast<float>(cellsAlive);
         env->done = true;
     } else if (env->steps >= kMaxStepsPerEpisode) {
         env->done = true;
