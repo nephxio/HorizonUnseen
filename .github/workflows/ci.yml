@@ -1,0 +1,111 @@
+name: CI
+
+# Tier 1: prove the project builds from a bare clone.
+#
+# This is deliberately not a release workflow. Its job is to catch the failure
+# nobody would otherwise notice -- that the documented from-scratch build path
+# is broken -- and to do it where a red run costs nothing.
+#
+# The runner has no GPU and no display, so the game cannot be launched here.
+# It can, however, be compiled, and once the headless simulation library from
+# the ai-playtest branch lands, gameplay logic can be exercised too (see the
+# commented-out step at the end).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Lets the workflow be run by hand from the Actions tab while it is being
+  # debugged, without needing to push a commit each time.
+  workflow_dispatch:
+
+concurrency:
+  # A newer push makes an in-flight run irrelevant.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    name: Windows / MSVC / ${{ matrix.build_type }}
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Debug catches assertions and Release catches the optimiser-only
+        # problems; both are cheap enough to run every time.
+        #
+        # The runtime library is spelled out per configuration rather than
+        # derived with a CMake generator expression: those contain '>' and the
+        # Windows runners default to PowerShell, which would read it as output
+        # redirection.
+        include:
+          - build_type: Debug
+            msvc_runtime: MultiThreadedDebug
+          - build_type: Release
+            msvc_runtime: MultiThreaded
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # glfw and imgui are pinned submodules; without this the build has no
+          # dependencies to compile against.
+          submodules: recursive
+
+      - name: Install Vulkan SDK
+        # Supplies glslc (shaders are compiled at build time, not committed)
+        # plus the Vulkan headers and import library.
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.3.296.0
+          cache: true
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_MSVC_RUNTIME_LIBRARY=${{ matrix.msvc_runtime }} -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Check expected outputs exist
+        # cmake --build succeeding does not guarantee the artefacts landed where
+        # the packaging step expects them, and that has bitten this project
+        # before.
+        shell: pwsh
+        run: |
+          $expected = @(
+            "build/HorizonUnseen.exe",
+            "build/HorizonUnseenEditor.exe",
+            "build/shaders/sprite.vert.spv",
+            "build/shaders/sprite.frag.spv",
+            "build/assets/atlas.png",
+            "build/assets/atlas.json"
+          )
+          $missing = $expected | Where-Object { -not (Test-Path $_) }
+          if ($missing) {
+            Write-Host "::error::Missing expected build outputs:"
+            $missing | ForEach-Object { Write-Host "::error::  $_" }
+            exit 1
+          }
+          Write-Host "All expected build outputs present."
+
+      - name: Verify the sprite atlas matches the SpriteId contract
+        # The atlas is generated art and the enum is hand-written C++; they are a
+        # hard contract and drift silently. Cheap to check, annoying to debug.
+        shell: pwsh
+        run: python tools/check_atlas.py
+
+      # Once the headless simulation library (src/Sim) merges from
+      # ai-playtest, gameplay itself becomes testable here -- it needs no GPU
+      # and no window:
+      #
+      # - name: Headless gameplay smoke test
+      #   run: |
+      #     python -m pip install --quiet numpy
+      #     python tools/rl/smoke_test.py

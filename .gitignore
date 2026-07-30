@@ -36,8 +36,11 @@ tools/rl/runs/
 *.app
 
 # Dependencies
-external/glfw/
-external/imgui/
+#
+# glfw and imgui are git submodules pinned to specific commits, so they are
+# tracked rather than ignored. Pinning matters: glfw was previously an
+# unpinned clone of master, which meant two checkouts could silently build
+# against different versions of it.
 
 # Compiled shaders
 *.spv

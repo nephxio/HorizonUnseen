@@ -17,14 +17,22 @@ time.
 
 ### Dependencies
 
-Clone these into `external/` (already vendored: `external/stb/stb_image.h`):
+GLFW and ImGui are git submodules pinned to specific commits; `stb_image.h` is
+vendored directly in `external/stb/`. Clone with submodules:
 
 ```bash
-cd external
-git clone https://github.com/glfw/glfw.git
-git clone https://github.com/ocornut/imgui.git
-cd ..
+git clone --recurse-submodules https://github.com/nephxio/HorizonUnseen.git
 ```
+
+If you already cloned without them:
+
+```bash
+git submodule update --init --recursive
+```
+
+They are pinned rather than tracking a branch, so every checkout builds against
+the same versions. Treat both as read-only drop-ins: fix problems in `src/`, not
+in the vendored trees, or the changes will be lost on the next upgrade.
 
 ### Build
 
