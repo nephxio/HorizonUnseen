@@ -35,6 +35,19 @@ constexpr float kDrifterBulletDamage = 8.0f;
 constexpr int kDrifterHellFanCount = 3;
 constexpr float kDrifterHellFanSpread = 0.42f;
 
+// Bullet hell: the slow wall.
+//
+// Drifters are the fodder, so they should not be the thing that kills you --
+// they should be the thing that shapes where you can stand. A wide arc of slow
+// bullets fired infrequently is a drifting wall to weave through rather than a
+// threat to react to, and it gives the fast patterns something to push against.
+constexpr int kDrifterWallCount = 9;
+constexpr float kDrifterWallSpread = 1.45f;
+constexpr float kDrifterWallSpeed = 132.0f;
+constexpr float kDrifterWallInterval = 2.0f;
+constexpr float kDrifterWallDamage = 7.0f;
+constexpr float kDrifterWallLifetime = 7.0f;
+
 // --- WaveRider --------------------------------------------------------------
 constexpr float kWaveRiderSpeed = 190.0f;
 constexpr float kWaveRiderAmplitude = 96.0f;
@@ -98,6 +111,20 @@ constexpr float kDiverBulletSpeedHell = 470.0f;
 constexpr float kDiverBulletDamage = 10.0f;
 constexpr float kDiverReturnX = 1240.0f;
 constexpr float kDiverWindGlowSize = 26.0f;
+
+// Bullet hell: the spiral wake.
+//
+// The dive itself stays ballistic and sidesteppable -- that is what makes it
+// fair. What changes is that the diver sheds a curling trail along its path, so
+// the sidestep is only half the problem: the lane the diver came through stays
+// dangerous behind it. Slow bullets on a rotating emission angle leave a
+// corkscrew hanging in the air rather than a straight line.
+constexpr float kDiverWakeInterval = 0.045f;
+constexpr float kDiverWakeSpeed = 120.0f;
+constexpr float kDiverWakeDamage = 7.0f;
+constexpr float kDiverWakeSpinRate = 7.5f;    // radians/second
+constexpr int kDiverWakeArms = 2;
+constexpr float kDiverWakeLifetime = 4.0f;
 
 // --- Turret -----------------------------------------------------------------
 constexpr float kTurretFireInterval = 2.1f;
@@ -401,17 +428,24 @@ void DrifterBehavior::update(EnemyBase& self, float dt, IGameWorld& world) {
 
     m_fireTimer -= dt;
     if (m_fireTimer <= 0.0f && onScreenToFire(self, world)) {
-        m_fireTimer = byMode(world, kDrifterFireInterval, kDrifterFireIntervalHell);
-
-        enemyfire::Shot shot;
-        shot.speed = byMode(world, kDrifterBulletSpeed, kDrifterBulletSpeedHell);
-        shot.damage = kDrifterBulletDamage;
-
         const Vector2 dir = enemyfire::aimAtPlayer(world, self.position());
+
         if (enemyfire::isBulletHell(world)) {
-            enemyfire::fireFan(world, self.position(), dir, kDrifterHellFanCount,
-                               kDrifterHellFanSpread, shot);
+            // A wide, slow wall rather than a faster aimed fan.
+            m_fireTimer = kDrifterWallInterval;
+
+            enemyfire::Shot shot;
+            shot.speed = kDrifterWallSpeed;
+            shot.damage = kDrifterWallDamage;
+            shot.lifetime = kDrifterWallLifetime;
+            enemyfire::fireFan(world, self.position(), dir, kDrifterWallCount,
+                               kDrifterWallSpread, shot);
         } else {
+            m_fireTimer = kDrifterFireInterval;
+
+            enemyfire::Shot shot;
+            shot.speed = kDrifterBulletSpeed;
+            shot.damage = kDrifterBulletDamage;
             enemyfire::fire(world, self.position(), dir, shot);
         }
         enemyfire::muzzle(world, self.position(), dir);
@@ -558,6 +592,33 @@ void DiverBehavior::update(EnemyBase& self, float dt, IGameWorld& world) {
         case Stage::Dive: {
             // Velocity was locked on entry; the dive is deliberately ballistic
             // so the player can sidestep it.
+            //
+            // In bullet hell the diver also sheds a corkscrew wake, so the lane
+            // it came through stays dangerous after it has passed.
+            if (enemyfire::isBulletHell(world)) {
+                m_wakeAngle += kDiverWakeSpinRate * dt;
+                m_wakeTimer -= dt;
+                if (m_wakeTimer <= 0.0f && onScreenToFire(self, world)) {
+                    m_wakeTimer = kDiverWakeInterval;
+
+                    enemyfire::Shot wake;
+                    wake.speed = kDiverWakeSpeed;
+                    wake.damage = kDiverWakeDamage;
+                    wake.lifetime = kDiverWakeLifetime;
+                    wake.radius = 5.0f;
+                    wake.size = { 12.0f, 12.0f };
+                    wake.tint = Color{ 1.0f, 0.45f, 0.45f, 1.0f };
+                    wake.additive = true;
+
+                    const float armStep = TwoPi / static_cast<float>(kDiverWakeArms);
+                    for (int arm = 0; arm < kDiverWakeArms; ++arm) {
+                        enemyfire::fireAngle(world, self.position(),
+                                             m_wakeAngle + armStep * static_cast<float>(arm),
+                                             wake);
+                    }
+                }
+            }
+
             m_fireTimer -= dt;
             if (m_burstLeft > 0 && m_fireTimer <= 0.0f && onScreenToFire(self, world)) {
                 m_fireTimer = kDiverBurstInterval;

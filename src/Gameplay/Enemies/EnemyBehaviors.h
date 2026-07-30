@@ -139,6 +139,10 @@ private:
     int m_passCount = 0;
     Vector2 m_lockedTarget{ 0.0f, 0.0f };
     float m_holdY = 0.0f;
+
+    // Bullet-hell wake shed during the dive and strafe.
+    float m_wakeTimer = 0.0f;
+    float m_wakeAngle = 0.0f;
 };
 
 // ---------------------------------------------------------------------------

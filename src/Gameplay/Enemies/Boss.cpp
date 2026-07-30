@@ -61,6 +61,19 @@ constexpr float kWeaverBulletSpeed = 250.0f;
 constexpr float kWeaverBulletSpeedHell = 320.0f;
 constexpr float kWeaverBulletDamage = 10.0f;
 
+// Bullet hell: counter-spiral.
+//
+// A second spiral wound the opposite way turns the phase from a maze that
+// rotates one way into an interference lattice, where the safe gaps are the
+// moving intersections of two patterns rather than the gaps of one. The step is
+// deliberately not the negation of the main spiral's -- an exact mirror
+// produces a static symmetric figure, while mismatched rates make the lattice
+// drift, so the player cannot memorise one safe orbit and sit in it. The slower
+// bullet speed keeps the two layers visually separable.
+constexpr float kWeaverCounterStep = -0.29f;
+constexpr int kWeaverCounterArms = 4;
+constexpr float kWeaverCounterBulletSpeed = 240.0f;
+
 // --- Phase 3: Bulwark -------------------------------------------------------
 constexpr float kBulwarkX = 1010.0f;
 constexpr float kBulwarkSweepSpeed = 185.0f;
@@ -280,6 +293,16 @@ void Boss::updateWeaver(float dt, IGameWorld& world) {
                                                  static_cast<float>(kWeaverSpiralArms),
                                                  static_cast<float>(kWeaverSpiralArmsHell)));
         enemyfire::fireRing(world, position(), arms, m_spiralAngle, shot);
+
+        if (enemyfire::isBulletHell(world)) {
+            m_counterSpiralAngle += kWeaverCounterStep;
+
+            enemyfire::Shot counter = shot;
+            counter.speed = kWeaverCounterBulletSpeed;
+            counter.tint = Color{ 1.0f, 0.6f, 0.9f, 1.0f };
+            enemyfire::fireRing(world, position(), kWeaverCounterArms,
+                                m_counterSpiralAngle, counter);
+        }
     }
 }
 

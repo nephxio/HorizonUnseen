@@ -68,6 +68,9 @@ private:
     float m_burstTimer = 0.0f;
     int m_burstLeft = 0;
     float m_spiralAngle = 0.0f;
+    // Bullet hell only: a second spiral wound the other way, at a rate that is
+    // not a mirror of the first so the two precess against each other.
+    float m_counterSpiralAngle = 0.0f;
     float m_wallGap = 0.5f;           // Normalised y of the gap in the wall.
     float m_wallGapDrift = 1.0f;
     int m_sweepDirection = 1;
