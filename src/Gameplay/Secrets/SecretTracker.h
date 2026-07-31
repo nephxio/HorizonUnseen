@@ -28,8 +28,19 @@ public:
         float timerStart = -1.0f; // Level time the timed streak began (< 0 => idle).
     };
 
-    // Resets all state and loads the definitions for the level.
+    // Resets all state and loads the level's definitions from SecretRegistry.
     void onLevelStart(const std::string& levelId);
+
+    // As above, but with the definitions supplied directly. The tracker's
+    // evaluation rules do not depend on where the definitions came from, so
+    // taking them as an argument keeps that logic reachable without the global
+    // registry -- which is what the tests use to exercise conditions the
+    // shipped levels do not happen to contain.
+    //
+    // The pointers must outlive the tracker; SecretRegistry's are static for
+    // the process lifetime.
+    void onLevelStart(const std::string& levelId,
+                      const std::vector<const SecretDefinition*>& definitions);
 
     // --- gameplay events ---------------------------------------------------
     void onPlayerMoved(const Vector2& position, float levelTime);

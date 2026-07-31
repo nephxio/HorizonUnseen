@@ -205,11 +205,22 @@ The binary can also be run directly for Catch2's filtering and reporting
 options — `./build/HorizonUnseenTests "[cells]"` runs one tag,
 `--list-tests` shows what is available.
 
-The energy cell suite is the priority target: the absorb-vs-break routing is
-the most load-bearing rule in the game and the least visible, since a bug there
-reads as "the game feels wrong" rather than as a crash. The tests pin the
-`GameConfig` values they reason about, so rebalancing the game cannot silently
-invalidate them.
+Two areas are covered so far, both chosen because a bug in them is silent:
+
+- **Energy cells** (`[cells]`) — the absorb-vs-break routing is the most
+  load-bearing rule in the game, and a bug there reads as "the game feels
+  wrong" rather than as a crash. The tests pin the `GameConfig` values they
+  reason about, so rebalancing cannot silently invalidate them.
+- **Secrets** (`[secrets]`) — the tracker's evaluation of each condition kind,
+  plus integrity checks over the shipped definitions. Since finding every
+  secret unlocks Bullet Hell and the total is derived by walking the
+  registries, a malformed secret does not error; it just becomes unearnable.
+  `SecretRegistryTests.cpp` checks for exactly the shapes that
+  `SecretTracker` skips silently.
+
+The tracker tests build their own definitions and pass them to
+`SecretTracker::onLevelStart`, so they describe the rules rather than whatever
+the shipped levels happen to declare.
 
 **Gameplay tests** (`tools/rl/ci_gameplay_test.py`) drive the real simulation
 through `src/Sim` and play whole episodes, asserting that waves spawn,

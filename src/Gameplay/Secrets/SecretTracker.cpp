@@ -16,6 +16,11 @@ constexpr const char* kLogCategory = "Secrets";
 // ---------------------------------------------------------------------------
 
 void SecretTracker::onLevelStart(const std::string& levelId) {
+    onLevelStart(levelId, SecretRegistry::forLevel(levelId));
+}
+
+void SecretTracker::onLevelStart(const std::string& levelId,
+                                 const std::vector<const SecretDefinition*>& definitions) {
     m_levelId = levelId;
     m_progress.clear();
     m_newlyUnlocked.clear();
@@ -23,7 +28,6 @@ void SecretTracker::onLevelStart(const std::string& levelId) {
     m_lastDamageTime = -1.0f;
     m_currentWaveStartTime = 0.0f;
 
-    const std::vector<const SecretDefinition*> definitions = SecretRegistry::forLevel(levelId);
     m_progress.reserve(definitions.size());
 
     for (const SecretDefinition* definition : definitions) {
