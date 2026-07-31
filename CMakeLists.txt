@@ -7,6 +7,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Options
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+option(HU_BUILD_TESTS "Build the unit test suite" ON)
 
 # Find Vulkan
 find_package(Vulkan REQUIRED)
@@ -14,9 +15,9 @@ find_package(Vulkan REQUIRED)
 # Add third-party dependencies
 add_subdirectory(external)
 
-# Both executables land next to the build directory's shaders/ and assets/
-# folders, so running either one from the build directory finds its data with
-# plain relative paths.
+# The executable lands next to the build directory's shaders/ and assets/
+# folders, so running it from the build directory finds its data with plain
+# relative paths.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 foreach(CONFIG ${CMAKE_CONFIGURATION_TYPES})
     string(TOUPPER ${CONFIG} CONFIG_UPPER)
@@ -25,7 +26,12 @@ endforeach()
 
 add_subdirectory(src)
 
-set(CMAKE_VS_STARTUP_PROJECT HorizonUnseenEditor)
+if(HU_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
+set(CMAKE_VS_STARTUP_PROJECT HorizonUnseen)
 
 # Copy shaders to build directory
 file(GLOB SHADER_SOURCES "shaders/*.vert" "shaders/*.frag")
@@ -47,7 +53,6 @@ endforeach()
 
 add_custom_target(shaders ALL DEPENDS ${SHADER_OUTPUTS})
 add_dependencies(HorizonUnseen shaders)
-add_dependencies(HorizonUnseenEditor shaders)
 
 # Mirror the sprite atlas into the build directory. Re-copied whenever the
 # generator is re-run, so regenerating art does not require a reconfigure.
@@ -59,4 +64,3 @@ add_custom_target(assets ALL
 )
 
 add_dependencies(HorizonUnseen assets)
-add_dependencies(HorizonUnseenEditor assets)

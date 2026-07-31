@@ -10,7 +10,7 @@
 #include "Core/DrawList.h"
 #include "Core/GameTypes.h"
 #include "Gameplay/IGameWorld.h"
-#include "Game/Entity.h"
+#include "Core/Vector2.h"
 
 #include <cstdint>
 

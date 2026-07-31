@@ -4,7 +4,7 @@
 //
 // The director owns the level clock and decides *when* something spawns. It
 // never owns the resulting enemies: each one is handed straight to a callback
-// the scene supplies, so GameScene remains the only container of live enemies
+// the scene supplies, so GameWorld remains the only container of live enemies
 // and the director stays trivially resettable and testable.
 
 #include "Core/GameTypes.h"

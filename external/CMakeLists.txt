@@ -26,3 +26,19 @@ target_link_libraries(imgui PUBLIC
     Vulkan::Vulkan
     glfw
 )
+
+# Catch2
+#
+# Only configured when the tests are being built, so a plain game build does not
+# pay to compile it. Guarded on the submodule actually being present: a clone
+# without --recurse-submodules should fail with a clear message rather than an
+# add_subdirectory error about a missing CMakeLists.
+if(HU_BUILD_TESTS)
+    if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/catch2/CMakeLists.txt)
+        message(FATAL_ERROR
+            "HU_BUILD_TESTS is ON but external/catch2 is empty. Run:\n"
+            "  git submodule update --init --recursive\n"
+            "or configure with -DHU_BUILD_TESTS=OFF to skip the test suite.")
+    endif()
+    add_subdirectory(catch2)
+endif()

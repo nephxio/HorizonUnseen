@@ -7,6 +7,7 @@ set(CORE_SOURCES
 
 set(CORE_HEADERS
     Log.h
+    Vector2.h
     Math.h
     GameTypes.h
     SpriteId.h

@@ -8,7 +8,8 @@ name: Release
 # release reproducible: it is built from a known commit with pinned submodules
 # rather than from whatever happened to be on someone's machine.
 #
-# The gameplay test gates the release. A tag that does not pass it does not ship.
+# The unit tests and the gameplay test both gate the release. A tag that does
+# not pass them does not ship.
 
 on:
   push:
@@ -81,6 +82,10 @@ jobs:
 
       - name: Build
         run: cmake --build build-release
+
+      - name: Unit tests
+        # Gates the release alongside the gameplay test below.
+        run: ctest --test-dir build-release --output-on-failure
 
       - name: Verify the sprite atlas matches the SpriteId contract
         run: python tools/check_atlas.py

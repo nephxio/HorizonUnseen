@@ -177,7 +177,7 @@ const LevelProgress* SaveGame::levelProgress(const std::string& levelId) const {
 // ---------------------------------------------------------------------------
 // Persistence
 //
-// File layout (little endian, matching ConfigManager's raw-POD style):
+// File layout (little endian, raw POD):
 //   u32 magic 'HUSG'
 //   u32 version
 //   u32 secretCount

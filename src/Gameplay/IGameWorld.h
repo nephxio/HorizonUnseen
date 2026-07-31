@@ -3,7 +3,7 @@
 // The seam between gameplay subsystems and the scene that owns them.
 //
 // Weapons, enemies, power-ups and effects all need to spawn things, query
-// things and shake the screen, but none of them should know about GameScene
+// things and shake the screen, but none of them should know about GameWorld
 // directly. They talk through this interface instead, which keeps each
 // subsystem independently testable and stops the scene from becoming a
 // dependency magnet.
@@ -11,7 +11,7 @@
 #include "Core/DrawList.h"   // Color, DrawLayer
 #include "Core/GameTypes.h"
 #include "Core/SpriteId.h"
-#include "Game/Entity.h"
+#include "Core/Vector2.h"
 
 #include <cstdint>
 #include <vector>

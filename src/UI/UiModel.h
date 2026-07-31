@@ -8,7 +8,7 @@
 // gameplay refactor cannot ripple into the HUD.
 
 #include "Core/GameTypes.h"
-#include "Game/Entity.h"   // Vector2
+#include "Core/Vector2.h"
 
 #include <cstddef>
 #include <string>

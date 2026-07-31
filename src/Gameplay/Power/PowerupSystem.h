@@ -14,7 +14,7 @@
 #include "Core/GameTypes.h"
 #include "Core/SpriteId.h"
 #include "Gameplay/IGameWorld.h"
-#include "Game/Entity.h"
+#include "Core/Vector2.h"
 
 #include <cstddef>
 #include <vector>
