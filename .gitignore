@@ -8,6 +8,9 @@ cmake-build-*/
 logs/
 saves/
 
+# Packaged releases (produced by tools/package_release.py)
+dist/
+
 # Python
 __pycache__/
 *.pyc
