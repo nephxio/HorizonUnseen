@@ -8,6 +8,18 @@ cmake-build-*/
 logs/
 saves/
 
+# Python
+__pycache__/
+*.pyc
+
+# Reinforcement learning training output.
+#
+# Checkpoints are ~1.3 MB of binary per run and regenerate from training, so
+# committing them would grow history by that much every experiment with no way
+# for git to compress it. Keep a specific agent by copying it out of runs/
+# deliberately rather than by tracking the whole directory.
+tools/rl/runs/
+
 # Visual Studio
 .vs/
 *.user
