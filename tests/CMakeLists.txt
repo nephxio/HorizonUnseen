@@ -8,6 +8,9 @@
 set(TEST_SOURCES
     main.cpp
     EnergyCellSystemTests.cpp
+    SecretConditionTests.cpp
+    SecretTrackerTests.cpp
+    SecretRegistryTests.cpp
 )
 
 add_executable(HorizonUnseenTests ${TEST_SOURCES})
