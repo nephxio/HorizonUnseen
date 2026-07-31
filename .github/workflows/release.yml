@@ -1,0 +1,136 @@
+name: Release
+
+# Tier 2: publish a playable build when a version tag is pushed.
+#
+#     git tag v0.3.0 && git push origin v0.3.0
+#
+# Replaces the manual build/package/upload dance, and more usefully makes the
+# release reproducible: it is built from a known commit with pinned submodules
+# rather than from whatever happened to be on someone's machine.
+#
+# The gameplay test gates the release. A tag that does not pass it does not ship.
+
+on:
+  push:
+    tags: ['v*']
+  # Allows a dry run against any ref: builds, tests and packages, but publishes
+  # nothing. Worth using before tagging.
+  workflow_dispatch:
+    inputs:
+      dry_run_version:
+        description: 'Version to package for a dry run (no release is created)'
+        required: false
+        default: '0.0.0-dryrun'
+
+permissions:
+  contents: write   # Required to create the release.
+
+jobs:
+  release-windows:
+    name: Build and publish Windows release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # Full history so release notes can be generated against the previous
+          # tag rather than a shallow stub.
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $tag = $env:GITHUB_REF -replace '^refs/tags/', ''
+            $version = $tag -replace '^v', ''
+            $publish = 'true'
+          } else {
+            $version = '${{ github.event.inputs.dry_run_version }}'
+            $tag = "v$version"
+            $publish = 'false'
+          }
+          # A hyphen marks a pre-release (v0.3.0-rc1), which should not become
+          # the "Latest" download.
+          $prerelease = if ($version -match '-') { 'true' } else { 'false' }
+
+          "tag=$tag"               | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "version=$version"       | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "publish=$publish"       | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "prerelease=$prerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "version=$version publish=$publish prerelease=$prerelease"
+
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.3.296.0
+          cache: true
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure (Release, static CRT)
+        # The static CRT is not optional for a distributable build: without it
+        # the executable depends on MSVC runtime DLLs that are absent on a
+        # machine without Visual Studio.
+        run: cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+
+      - name: Build
+        run: cmake --build build-release
+
+      - name: Verify the sprite atlas matches the SpriteId contract
+        run: python tools/check_atlas.py
+
+      - name: Install Python test dependencies
+        run: python -m pip install --quiet numpy
+
+      - name: Headless gameplay test
+        # Gates the release: a tag that does not play correctly does not ship.
+        env:
+          PYTHONPATH: ${{ github.workspace }}/tools/rl
+          HUSIM_PATH: ${{ github.workspace }}/build-release/husim.dll
+        run: python tools/rl/ci_gameplay_test.py
+
+      - name: Report playtest flags baked into this build
+        # An automated release will ship whatever these source constants say.
+        # Surfacing them means a release never silently goes out with the wrong
+        # one, which is easy to do when nobody is watching the build.
+        shell: pwsh
+        run: |
+          $app = Get-Content src/Application.cpp -Raw
+          if ($app -match 'DevAlwaysUnlockBulletHell\s*=\s*(true|false)') {
+            $value = $Matches[1]
+            Write-Host "DevAlwaysUnlockBulletHell = $value"
+            if ($value -eq 'true') {
+              Write-Host "::warning title=Playtest flag active::This release ships with Bullet Hell unlocked from the menu regardless of secrets found. Set DevAlwaysUnlockBulletHell to false in src/Application.cpp for a non-playtest release."
+            }
+          } else {
+            Write-Host "::warning::Could not determine DevAlwaysUnlockBulletHell state"
+          }
+
+      - name: Package
+        run: python tools/package_release.py --build build-release --version ${{ steps.version.outputs.version }}
+
+      - name: Upload artefact (always, so dry runs are inspectable)
+        uses: actions/upload-artifact@v4
+        with:
+          name: HorizonUnseen-v${{ steps.version.outputs.version }}-win64
+          path: dist/*.zip
+          retention-days: 14
+
+      - name: Publish release
+        if: steps.version.outputs.publish == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Horizon Unseen ${{ steps.version.outputs.tag }}
+          files: dist/*.zip
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          # Auto-generates the changelog from commits since the previous tag.
+          # A hand-written body can be added by editing the release afterwards.
+          generate_release_notes: true
+          fail_on_unmatched_files: true
