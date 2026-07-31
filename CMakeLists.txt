@@ -7,6 +7,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Options
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+option(HU_BUILD_TESTS "Build the unit test suite" ON)
 
 # Find Vulkan
 find_package(Vulkan REQUIRED)
@@ -24,6 +25,11 @@ foreach(CONFIG ${CMAKE_CONFIGURATION_TYPES})
 endforeach()
 
 add_subdirectory(src)
+
+if(HU_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 set(CMAKE_VS_STARTUP_PROJECT HorizonUnseen)
 

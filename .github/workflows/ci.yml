@@ -7,9 +7,9 @@ name: CI
 # is broken -- and to do it where a red run costs nothing.
 #
 # The runner has no GPU and no display, so the game cannot be launched here.
-# It can, however, be compiled, and once the headless simulation library from
-# the ai-playtest branch lands, gameplay logic can be exercised too (see the
-# commented-out step at the end).
+# It can, however, be compiled and its logic exercised: the Catch2 suite in
+# tests/ checks individual rules, and the headless simulation library in
+# src/Sim lets whole episodes be played through without a window.
 
 on:
   push:
@@ -78,6 +78,12 @@ jobs:
 
       - name: Build
         run: cmake --build build
+
+      - name: Unit tests
+        # Gameplay rules in isolation -- the absorb-vs-break routing, the
+        # sliding damage window, charge spending. Fast, and a failure here names
+        # the exact rule that broke rather than just "the episode looked wrong".
+        run: ctest --test-dir build --output-on-failure
 
       - name: Check expected outputs exist
         # cmake --build succeeding does not guarantee the artefacts landed where

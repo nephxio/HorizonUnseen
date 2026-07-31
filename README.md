@@ -17,8 +17,8 @@ time.
 
 ### Dependencies
 
-GLFW and ImGui are git submodules pinned to specific commits; `stb_image.h` is
-vendored directly in `external/stb/`. Clone with submodules:
+GLFW, ImGui and Catch2 are git submodules pinned to specific commits;
+`stb_image.h` is vendored directly in `external/stb/`. Clone with submodules:
 
 ```bash
 git clone --recurse-submodules https://github.com/nephxio/HorizonUnseen.git
@@ -31,8 +31,11 @@ git submodule update --init --recursive
 ```
 
 They are pinned rather than tracking a branch, so every checkout builds against
-the same versions. Treat both as read-only drop-ins: fix problems in `src/`, not
+the same versions. Treat them as read-only drop-ins: fix problems in `src/`, not
 in the vendored trees, or the changes will be lost on the next upgrade.
+
+Catch2 is only configured when the test suite is being built. Configure with
+`-DHU_BUILD_TESTS=OFF` to skip it entirely.
 
 ### Build
 
@@ -167,6 +170,8 @@ src/
 ├── Sim/           Headless C ABI over GameWorld, for the RL harness
 ├── UI/            HUD, menus, debug overlay (renders from plain view models)
 └── Application    State machine wiring gameplay, UI and rendering together
+
+tests/             Catch2 unit tests for gameplay rules
 ```
 
 The layering is deliberate: gameplay never includes a graphics header, the UI never
@@ -184,6 +189,38 @@ python tools/generate_art.py --out assets
 This writes `assets/atlas.png` and `assets/atlas.json`. The sprite names in that JSON are
 a hard contract with the `hu::SpriteId` enum in `src/Core/SpriteId.h`; the renderer logs a
 warning for any sprite it cannot resolve and falls back to a white quad.
+
+## Tests
+
+Two layers, both headless — neither needs a GPU or a display.
+
+**Unit tests** (`tests/`, Catch2) check individual gameplay rules in isolation.
+They are built by default and run through ctest:
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+The binary can also be run directly for Catch2's filtering and reporting
+options — `./build/HorizonUnseenTests "[cells]"` runs one tag,
+`--list-tests` shows what is available.
+
+The energy cell suite is the priority target: the absorb-vs-break routing is
+the most load-bearing rule in the game and the least visible, since a bug there
+reads as "the game feels wrong" rather than as a crash. The tests pin the
+`GameConfig` values they reason about, so rebalancing the game cannot silently
+invalidate them.
+
+**Gameplay tests** (`tools/rl/ci_gameplay_test.py`) drive the real simulation
+through `src/Sim` and play whole episodes, asserting that waves spawn,
+collisions resolve, cells break and episodes terminate:
+
+```bash
+python tools/rl/ci_gameplay_test.py
+```
+
+It needs `numpy` and `HUSIM_PATH` pointing at the built `husim.dll`, with
+`PYTHONPATH` set to `tools/rl`. Both layers run in CI on every push.
 
 ## Debugging
 
