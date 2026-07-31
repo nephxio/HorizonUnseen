@@ -44,8 +44,8 @@ cmake --build build
 On Windows this needs the MSVC environment loaded (`vcvars64.bat`), otherwise the
 compiler cannot find the CRT headers.
 
-Both executables and their `shaders/` and `assets/` folders land in the build directory,
-so run them from there:
+The executable and its `shaders/` and `assets/` folders land in the build directory,
+so run it from there:
 
 ```bash
 cd build && ./HorizonUnseen
@@ -153,7 +153,7 @@ Bullet Hell unlock all pick it up automatically.
 
 ```
 src/
-├── Core/          Logging, math, shared types, SpriteId, DrawList  (no Vulkan/GLFW)
+├── Core/          Logging, math, Vector2, shared types, SpriteId, DrawList  (no Vulkan/GLFW)
 ├── Gameplay/      Simulation; talks to the scene through IGameWorld
 │   ├── Enemies/     Archetypes, behaviours, boss
 │   ├── Levels/      Level data, registry, director
@@ -164,8 +164,8 @@ src/
 │   ├── Weapons/     Weapons and superweapons
 │   └── GameWorld    The scene: owns every system, implements IGameWorld
 ├── Rendering/     Batched instanced sprite renderer, atlas, textures
+├── Sim/           Headless C ABI over GameWorld, for the RL harness
 ├── UI/            HUD, menus, debug overlay (renders from plain view models)
-├── Editor/        Separate editor application
 └── Application    State machine wiring gameplay, UI and rendering together
 ```
 

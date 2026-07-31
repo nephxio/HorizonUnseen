@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Log.h"
-#include "Game/Entity.h"   // Vector2
+#include "Core/Vector2.h"
 #include "UI/UiModel.h"
 
 #include <string>

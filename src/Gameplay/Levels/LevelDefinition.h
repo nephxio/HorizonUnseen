@@ -9,7 +9,7 @@
 // registry -- no other system changes.
 
 #include "Core/GameTypes.h"
-#include "Game/Entity.h"
+#include "Core/Vector2.h"
 #include "Gameplay/Enemies/EnemyBase.h"
 
 #include <cstddef>

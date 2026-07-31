@@ -87,7 +87,6 @@ jobs:
         run: |
           $expected = @(
             "build/HorizonUnseen.exe",
-            "build/HorizonUnseenEditor.exe",
             "build/husim.dll",
             "build/shaders/sprite.vert.spv",
             "build/shaders/sprite.frag.spv",

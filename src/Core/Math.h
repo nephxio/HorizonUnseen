@@ -2,11 +2,10 @@
 
 // Small 2D vector helpers shared by gameplay and rendering.
 //
-// Vector2 itself already exists in Game/Entity.h and is used pervasively, so
-// this header adds free functions around that type rather than introducing a
-// competing vector class.
+// The type itself lives in Core/Vector2.h; this header adds free functions
+// around it rather than introducing a competing vector class.
 
-#include "Game/Entity.h"
+#include "Core/Vector2.h"
 
 #include <cmath>
 #include <cstdlib>

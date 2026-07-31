@@ -34,9 +34,9 @@ REQUIRED_ARTIFACTS = [
     ("assets/atlas.json", "assets/atlas.json"),
 ]
 
-# The editor and the RL library are developer tools, not player-facing, so they
-# are deliberately excluded from the distribution.
-EXCLUDED_FROM_PACKAGE = ("HorizonUnseenEditor.exe", "husim.dll")
+# The RL library is a developer tool, not player-facing, so it is deliberately
+# excluded from the distribution.
+EXCLUDED_FROM_PACKAGE = ("husim.dll",)
 
 README_TEMPLATE = REPO_ROOT / "packaging" / "README.txt"
 

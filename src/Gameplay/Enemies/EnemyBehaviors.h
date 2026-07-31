@@ -11,7 +11,7 @@
 #include "Core/GameTypes.h"
 #include "Core/Math.h"
 #include "Core/SpriteId.h"
-#include "Game/Entity.h"
+#include "Core/Vector2.h"
 #include "Gameplay/Enemies/EnemyBase.h"
 
 namespace hu {

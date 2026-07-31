@@ -9,7 +9,7 @@
 // save file layout or the UI.
 
 #include "Core/GameTypes.h"
-#include "Game/Entity.h"
+#include "Core/Vector2.h"
 
 #include <cstdint>
 #include <string>

@@ -15,7 +15,7 @@
 #include "Core/DrawList.h"
 #include "Core/GameTypes.h"
 #include "Core/SpriteId.h"
-#include "Game/Entity.h"
+#include "Core/Vector2.h"
 
 #include <cstdint>
 #include <memory>
@@ -206,7 +206,7 @@ public:
 
     // --- Spawned children -------------------------------------------------
     // Behaviours (Splitter) push children here; the scene drains the queue
-    // after update so LevelDirector/GameScene stay the only owners of enemies.
+    // after update so GameWorld stays the only owner of enemies.
     void spawnChild(std::unique_ptr<EnemyBase> child);
     bool hasPendingSpawns() const { return !m_pendingSpawns.empty(); }
     std::vector<std::unique_ptr<EnemyBase>> takePendingSpawns();

@@ -9,7 +9,7 @@
 
 #include "Core/DrawList.h"
 #include "Core/SpriteId.h"
-#include "Game/Entity.h"
+#include "Core/Vector2.h"
 
 #include <cstddef>
 #include <cstdint>

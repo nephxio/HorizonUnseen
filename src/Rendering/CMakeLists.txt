@@ -43,13 +43,6 @@ target_link_libraries(HorizonUnseenRendering PUBLIC
     imgui
 )
 
-# SceneRenderer's compatibility overload still reads GameScene directly. The
-# gameplay library links this one, so use the include path rather than a link
-# dependency to avoid a cycle.
-target_include_directories(HorizonUnseenRendering PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../..
-)
-
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/.. PREFIX "Source Files/Rendering" FILES
     ${RENDERING_SOURCES}
     ${RENDERING_HEADERS}

@@ -7,7 +7,7 @@
 // the same scene can be drawn by the game window or the editor viewport.
 
 #include "Core/SpriteId.h"
-#include "Game/Entity.h"
+#include "Core/Vector2.h"
 
 #include <algorithm>
 #include <cstdint>
