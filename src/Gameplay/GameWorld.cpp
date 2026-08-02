@@ -124,6 +124,7 @@ bool GameWorld::startLevel(const std::string& levelId, DifficultyMode mode) {
     m_particles.clear();
     m_enemies.clear();
     m_notices.clear();
+    m_soundEvents.clear();
 
     m_director.setDifficulty(mode);
     m_director.setLevel(level);
@@ -209,9 +210,11 @@ void GameWorld::update(float deltaTime, const PlayerCommand& command) {
         SaveGame::instance().unlockSecret(secret->id);
         m_score += SecretScore;
         pushNotice("SECRET FOUND", secret->displayName, NoticeKind::Secret);
+        playSound(SoundId::SecretFound);
 
         EffectRequest fx;
         fx.kind = EffectKind::PowerupPickup;
+        fx.silent = true;   // the secret sting replaces the pick-up chime
         fx.position = m_player.position;
         fx.scale = 2.0f;
         fx.tint = Color{ 0.85f, 0.55f, 1.0f, 1.0f };
@@ -480,7 +483,12 @@ void GameWorld::updateGrazing(float deltaTime) {
             fx.kind = EffectKind::CellCharge;
             fx.position = shot.position();
             fx.scale = 0.35f;
+            // Grazing borrows the cell-charge burst but gets its own tick, and
+            // rides the same throttle: under heavy fire this fires many times a
+            // second, which would otherwise be a buzz rather than feedback.
+            fx.silent = true;
             spawnEffect(fx);
+            playSoundAt(SoundId::Graze, shot.position(), 0.5f);
         }
     }
 }
@@ -765,8 +773,75 @@ void GameWorld::spawnPowerup(PowerupType type, Vector2 position) {
     m_powerups.spawn(type, position);
 }
 
+namespace {
+
+// Every visual effect is also an audible event, so the sound comes along with
+// the effect rather than needing a second call at ~50 sites. Returning false
+// means "this effect is silent".
+//
+// Thruster is the notable exception: it is emitted continuously while the ship
+// moves, so firing a one-shot for it would produce a machine-gun rattle rather
+// than an engine.
+bool soundForEffect(EffectKind kind, SoundId& out) {
+    switch (kind) {
+        case EffectKind::MuzzleFlash:       out = SoundId::WeaponFire;        return true;
+        case EffectKind::Impact:            out = SoundId::Impact;            return true;
+        case EffectKind::Explosion:         out = SoundId::Explosion;         return true;
+        case EffectKind::BigExplosion:      out = SoundId::BigExplosion;      return true;
+        case EffectKind::PowerupPickup:     out = SoundId::PowerupPickup;     return true;
+        case EffectKind::CellBreak:         out = SoundId::CellBreak;         return true;
+        case EffectKind::CellCharge:        out = SoundId::CellCharge;        return true;
+        case EffectKind::SuperweaponCharge: out = SoundId::SuperweaponCharge; return true;
+        case EffectKind::ScreenClear:       out = SoundId::ScreenClear;       return true;
+        case EffectKind::Debris:            out = SoundId::Debris;            return true;
+        case EffectKind::Thruster:          return false;
+    }
+    return false;
+}
+
+} // namespace
+
 void GameWorld::spawnEffect(const EffectRequest& request) {
     playEffect(m_particles, request);
+
+    SoundId sound = SoundId::Impact;
+    if (!request.silent && soundForEffect(request.kind, sound)) {
+        playSoundAt(sound, request.position);
+    }
+}
+
+void GameWorld::playSound(SoundId id, float gain) {
+    queueSound(SoundEvent{ id, gain, 0.0f });
+}
+
+void GameWorld::queueSound(const SoundEvent& event) {
+    // Nothing obliges anyone to drain this. The headless simulation in src/Sim
+    // steps the world millions of times and never calls takeSoundEvents(), so
+    // an uncapped queue would be an unbounded leak in the RL environment rather
+    // than in the game. A frame produces a couple of dozen sounds at worst, so
+    // hitting this cap means nobody is listening -- drop rather than grow.
+    if (m_soundEvents.size() >= MaxQueuedSoundEvents) {
+        return;
+    }
+    m_soundEvents.push_back(event);
+}
+
+void GameWorld::playSoundAt(SoundId id, Vector2 position, float gain) {
+    // Screen x maps to the stereo field. Clamped rather than wrapped so an
+    // off-screen explosion stays hard left or hard right instead of jumping to
+    // the other speaker.
+    float pan = 0.0f;
+    if (m_screenWidth > 0.0f) {
+        pan = (position.x / m_screenWidth) * 2.0f - 1.0f;
+        pan = clampf(pan, -1.0f, 1.0f);
+    }
+    queueSound(SoundEvent{ id, gain, pan });
+}
+
+std::vector<SoundEvent> GameWorld::takeSoundEvents() {
+    std::vector<SoundEvent> out;
+    out.swap(m_soundEvents);
+    return out;
 }
 
 Vector2 GameWorld::playerPosition() const {

@@ -313,12 +313,28 @@ MenuAction Menus::drawSecretsScreen(const ProgressModel& progress, float viewpor
     return action;
 }
 
-MenuAction Menus::drawOptions(float viewportWidth, float viewportHeight) {
+MenuAction Menus::drawOptions(float viewportWidth, float viewportHeight, AudioSettings& audio) {
     MenuAction action = MenuAction::None;
 
-    beginCenteredPanel("##options", viewportWidth, viewportHeight, 420.0f, 320.0f);
+    beginCenteredPanel("##options", viewportWidth, viewportHeight, 420.0f, 470.0f);
 
     centeredText("OPTIONS", theme::Accent);
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::TextColored(theme::TextDim, "AUDIO");
+    if (audio.available) {
+        ImGui::PushItemWidth(-90.0f);
+        ImGui::SliderFloat("Master", &audio.master, 0.0f, 1.0f, "%.2f");
+        ImGui::SliderFloat("Effects", &audio.sfx, 0.0f, 1.0f, "%.2f");
+        ImGui::SliderFloat("Music", &audio.music, 0.0f, 1.0f, "%.2f");
+        ImGui::PopItemWidth();
+    } else {
+        // Sliders that do nothing read as a bug; say what actually happened.
+        ImGui::TextColored(theme::TextDim, "No audio device was found.\nThe game is running silently.");
+    }
+
+    ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -333,8 +349,8 @@ MenuAction Menus::drawOptions(float viewportWidth, float viewportHeight) {
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::TextColored(theme::TextDim,
-                       "Live tuning lives in the debug console; the editor\n"
-                       "application exposes the full config.");
+                       "Live tuning lives in the debug console,\n"
+                       "opened with the backtick key.");
 
     ImGui::Spacing();
     if (menuButton("BACK")) {

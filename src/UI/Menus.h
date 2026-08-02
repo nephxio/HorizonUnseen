@@ -28,7 +28,8 @@ public:
     // played, so a first run stays a discovery.
     MenuAction drawSecretsScreen(const ProgressModel& progress, float viewportWidth, float viewportHeight);
 
-    MenuAction drawOptions(float viewportWidth, float viewportHeight);
+    // `audio` is edited in place by the volume sliders.
+    MenuAction drawOptions(float viewportWidth, float viewportHeight, AudioSettings& audio);
 
 private:
     void drawTitle(const char* title, const char* subtitle, float viewportWidth, float y);

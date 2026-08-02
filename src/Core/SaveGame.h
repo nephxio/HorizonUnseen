@@ -63,13 +63,31 @@ public:
     const LevelProgress* levelProgress(const std::string& levelId) const;
     const std::map<std::string, LevelProgress>& allLevelProgress() const { return m_levels; }
 
+    // --- audio settings ----------------------------------------------------
+    // Stored in the profile rather than a separate settings file: there is only
+    // one profile, and a second file would be a second thing to keep in step.
+    // All three are clamped to [0, 1] on the way in.
+    float masterVolume() const { return m_masterVolume; }
+    float sfxVolume() const { return m_sfxVolume; }
+    float musicVolume() const { return m_musicVolume; }
+    void setMasterVolume(float volume);
+    void setSfxVolume(float volume);
+    void setMusicVolume(float volume);
+
     // --- lifecycle ---------------------------------------------------------
     void resetProgress();
     const std::string& lastError() const { return m_lastError; }
 
 private:
     static constexpr std::uint32_t kMagic = 0x48555347;  // "HUSG" (Horizon Unseen Save Game)
-    static constexpr std::uint32_t kVersion = 1;
+
+    // v2 appended the three audio volumes. v1 files still load; they simply
+    // keep the defaults below and gain the field on the next save.
+    static constexpr std::uint32_t kVersion = 2;
+
+    static constexpr float kDefaultMasterVolume = 0.8f;
+    static constexpr float kDefaultSfxVolume = 1.0f;
+    static constexpr float kDefaultMusicVolume = 0.6f;
 
     // Sanity ceilings so a corrupt length field cannot trigger a huge alloc.
     static constexpr std::uint32_t kMaxRecords = 100000;
@@ -80,6 +98,9 @@ private:
     std::set<std::string> m_unlockedSecrets;
     std::map<std::string, LevelProgress> m_levels;
     bool m_bulletHellUnlocked = false;
+    float m_masterVolume = kDefaultMasterVolume;
+    float m_sfxVolume = kDefaultSfxVolume;
+    float m_musicVolume = kDefaultMusicVolume;
     mutable std::string m_lastError;
 };
 

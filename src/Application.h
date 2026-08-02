@@ -7,6 +7,7 @@
 // depends on gameplay, UI and rendering at once; each of those three knows
 // nothing about the others.
 
+#include "Audio/AudioEngine.h"
 #include "Core/DrawList.h"
 #include "Core/GameTypes.h"
 #include "Gameplay/GameWorld.h"
@@ -47,14 +48,25 @@ private:
     void buildProgressModel();
     void buildDebugStats();
 
+    // Picks the track the current state should be playing and asks for it.
+    // Safe to call every frame: requesting the track already playing is a no-op.
+    void updateMusic();
+
+    // Pushes any slider change into the engine so it is audible while dragging,
+    // and persists it once the value settles.
+    void applyAudioSettings();
+
     std::unique_ptr<VulkanRenderer> m_renderer;
     std::unique_ptr<InputSystem> m_input;
     std::unique_ptr<hu::GameWorld> m_world;
+
+    hu::AudioEngine m_audio;
 
     hu::Hud m_hud;
     hu::Menus m_menus;
     hu::DebugOverlay m_debugOverlay;
 
+    hu::AudioSettings m_audioSettings;
     hu::HudModel m_hudModel;
     hu::ProgressModel m_progressModel;
     hu::DebugStats m_debugStats;

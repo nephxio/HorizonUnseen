@@ -66,6 +66,19 @@ void Application::init() {
     // Progression is loaded once; a missing file just means a fresh profile.
     hu::SaveGame::instance().load();
 
+    // Audio is optional by design: init() returning false means no device was
+    // available, and every later call becomes a no-op. The game stays playable
+    // in silence rather than refusing to start on a machine without sound.
+    m_audio.init("assets");
+    m_audio.setMasterVolume(hu::SaveGame::instance().masterVolume());
+    m_audio.setSfxVolume(hu::SaveGame::instance().sfxVolume());
+    m_audio.setMusicVolume(hu::SaveGame::instance().musicVolume());
+
+    m_audioSettings.master = hu::SaveGame::instance().masterVolume();
+    m_audioSettings.sfx = hu::SaveGame::instance().sfxVolume();
+    m_audioSettings.music = hu::SaveGame::instance().musicVolume();
+    m_audioSettings.available = m_audio.isAvailable();
+
     HU_LOG_INFO(LogCat, "%zu level(s) registered, %zu secret(s) total, bullet hell %s",
                 hu::LevelRegistry::count(),
                 hu::SecretRegistry::totalCount(),
@@ -123,6 +136,11 @@ void Application::update(float deltaTime) {
 
             m_world->update(deltaTime, buildPlayerCommand());
 
+            // Gameplay queued these without knowing whether anything is
+            // listening, exactly as it emits a DrawList without knowing about
+            // Vulkan. Draining every frame is what stops the queue growing.
+            m_audio.playAll(m_world->takeSoundEvents());
+
             // Surface gameplay notifications as HUD toasts.
             for (const hu::Notice& notice : m_world->takeNotices()) {
                 hu::Toast toast;
@@ -169,6 +187,9 @@ void Application::update(float deltaTime) {
     } else {
         m_drawList.clear();
     }
+
+    // Last, so it sees the state any transition above has already settled on.
+    updateMusic();
 }
 
 // Translates the keyboard into one frame of player intent. This is the only
@@ -233,7 +254,8 @@ void Application::drawUi() {
             break;
 
         case hu::GameStateId::Options:
-            action = m_menus.drawOptions(width, height);
+            action = m_menus.drawOptions(width, height, m_audioSettings);
+            applyAudioSettings();
             break;
     }
 
@@ -290,7 +312,68 @@ void Application::applyDebugRequest(const hu::DebugRequest& request) {
     if (request.toggleInvulnerable){ m_world->debugToggleInvulnerable(); }
 }
 
+void Application::applyAudioSettings() {
+    hu::SaveGame& save = hu::SaveGame::instance();
+
+    const bool changed = m_audioSettings.master != save.masterVolume() ||
+                         m_audioSettings.sfx != save.sfxVolume() ||
+                         m_audioSettings.music != save.musicVolume();
+    if (!changed) {
+        return;
+    }
+
+    save.setMasterVolume(m_audioSettings.master);
+    save.setSfxVolume(m_audioSettings.sfx);
+    save.setMusicVolume(m_audioSettings.music);
+
+    // Applied immediately so dragging a slider is audible, but written only
+    // when the mouse is released -- a save per frame while dragging would hit
+    // the disk a hundred times for one adjustment.
+    m_audio.setMasterVolume(save.masterVolume());
+    m_audio.setSfxVolume(save.sfxVolume());
+    m_audio.setMusicVolume(save.musicVolume());
+
+    if (!ImGui::IsAnyItemActive()) {
+        save.save();
+    }
+}
+
+void Application::updateMusic() {
+    switch (m_state) {
+        case hu::GameStateId::Playing:
+        case hu::GameStateId::Paused: {
+            // The boss track takes over for the whole boss fight rather than
+            // per phase, so it does not flip back and forth mid-encounter.
+            float bossHealth = 0.0f;
+            const bool bossOnScreen = m_world && m_world->bossStatus(bossHealth);
+            m_audio.playMusic(bossOnScreen ? hu::MusicId::Boss : hu::MusicId::Level);
+            break;
+        }
+
+        // Everything else is a menu, including the end-of-run screens: the
+        // level track stopping is part of how a run ending reads.
+        default:
+            m_audio.playMusic(hu::MusicId::Menu);
+            break;
+    }
+}
+
 void Application::applyMenuAction(hu::MenuAction action) {
+    // Every action that is not "nothing happened" is a button press, and the
+    // three tones distinguish going forward, going back, and merely moving.
+    switch (action) {
+        case hu::MenuAction::None:
+            break;
+        case hu::MenuAction::BackToMainMenu:
+        case hu::MenuAction::QuitToMenu:
+        case hu::MenuAction::QuitGame:
+            m_audio.play(hu::SoundEvent{ hu::SoundId::UiBack, 1.0f, 0.0f });
+            break;
+        default:
+            m_audio.play(hu::SoundEvent{ hu::SoundId::UiSelect, 1.0f, 0.0f });
+            break;
+    }
+
     switch (action) {
         case hu::MenuAction::StartNormal:
             startLevel(hu::DifficultyMode::Normal);
@@ -516,6 +599,7 @@ void Application::buildDebugStats() {
 }
 
 void Application::cleanup() {
+    m_audio.shutdown();
     if (m_renderer) {
         m_renderer->cleanup();
     }
