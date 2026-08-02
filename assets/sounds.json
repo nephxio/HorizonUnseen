@@ -1,0 +1,86 @@
+{
+  "music": {
+    "music_boss": {
+      "file": "sounds/music_boss.wav",
+      "gain": 0.55,
+      "loop": true
+    },
+    "music_level": {
+      "file": "sounds/music_level.wav",
+      "gain": 0.5,
+      "loop": true
+    },
+    "music_menu": {
+      "file": "sounds/music_menu.wav",
+      "gain": 0.45,
+      "loop": true
+    }
+  },
+  "sample_rate": 44100,
+  "sounds": {
+    "big_explosion": {
+      "file": "sounds/big_explosion.wav",
+      "gain": 0.85
+    },
+    "cell_break": {
+      "file": "sounds/cell_break.wav",
+      "gain": 0.8
+    },
+    "cell_charge": {
+      "file": "sounds/cell_charge.wav",
+      "gain": 0.45
+    },
+    "debris": {
+      "file": "sounds/debris.wav",
+      "gain": 0.4
+    },
+    "enemy_fire": {
+      "file": "sounds/enemy_fire.wav",
+      "gain": 0.45
+    },
+    "explosion": {
+      "file": "sounds/explosion.wav",
+      "gain": 0.7
+    },
+    "graze": {
+      "file": "sounds/graze.wav",
+      "gain": 0.3
+    },
+    "impact": {
+      "file": "sounds/impact.wav",
+      "gain": 0.5
+    },
+    "powerup_pickup": {
+      "file": "sounds/powerup_pickup.wav",
+      "gain": 0.7
+    },
+    "screen_clear": {
+      "file": "sounds/screen_clear.wav",
+      "gain": 0.9
+    },
+    "secret_found": {
+      "file": "sounds/secret_found.wav",
+      "gain": 0.8
+    },
+    "superweapon_charge": {
+      "file": "sounds/superweapon_charge.wav",
+      "gain": 0.7
+    },
+    "ui_back": {
+      "file": "sounds/ui_back.wav",
+      "gain": 0.5
+    },
+    "ui_move": {
+      "file": "sounds/ui_move.wav",
+      "gain": 0.35
+    },
+    "ui_select": {
+      "file": "sounds/ui_select.wav",
+      "gain": 0.5
+    },
+    "weapon_fire": {
+      "file": "sounds/weapon_fire.wav",
+      "gain": 0.55
+    }
+  }
+}

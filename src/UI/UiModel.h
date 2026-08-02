@@ -123,6 +123,21 @@ struct ProgressModel {
 
 // What the menus ask the application to do. The menu widgets are pure: they
 // return an action and never mutate game state themselves.
+// Mixer state, edited in place by the options screen.
+//
+// Passed by reference rather than returned as an action because a slider
+// produces a continuous stream of changes rather than a discrete event, and the
+// application wants to hear each one so the level responds while you drag it.
+struct AudioSettings {
+    float master = 0.8f;
+    float sfx = 1.0f;
+    float music = 0.6f;
+
+    // False when no audio device was found. The screen says so rather than
+    // presenting sliders that appear broken.
+    bool available = true;
+};
+
 enum class MenuAction {
     None,
     StartNormal,

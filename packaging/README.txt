@@ -20,6 +20,11 @@ CONTROLS
   Esc .................. Pause
   ` (backtick) ......... Debug console (stats, logs, playtest shortcuts)
 
+AUDIO
+  Volume sliders are on the Options screen (master, effects, music) and
+  are remembered between sessions. If no sound device is found the game
+  runs silently rather than refusing to start.
+
 ------------------------------------------------------------------------
 READ THIS BIT - the core mechanic is not obvious
 ------------------------------------------------------------------------
@@ -77,3 +82,27 @@ WHAT FEEDBACK IS USEFUL
 TROUBLESHOOTING
   If it will not start, update your graphics drivers - the game needs
   Vulkan.
+
+  No sound? Check the Options screen sliders first. The game will also
+  report "No audio device was found" there if it could not open one.
+
+------------------------------------------------------------------------
+THIRD-PARTY SOFTWARE
+------------------------------------------------------------------------
+
+Horizon Unseen itself is MIT licensed.
+
+This package includes OpenAL32.dll, which is OpenAL Soft, copyright (C)
+1999-2024 the OpenAL Soft authors, licensed under the GNU Lesser General
+Public License version 2 or later.
+
+OpenAL Soft is dynamically linked and unmodified. Its complete source is
+available at:
+
+  https://github.com/kcat/openal-soft
+
+The exact revision used to build this DLL is tag 1.25.2. You may replace
+OpenAL32.dll with your own build of the same library, which is the
+relinking right the LGPL grants you.
+
+A copy of the LGPL is included with the OpenAL Soft source above.

@@ -17,8 +17,9 @@ time.
 
 ### Dependencies
 
-GLFW, ImGui and Catch2 are git submodules pinned to specific commits;
-`stb_image.h` is vendored directly in `external/stb/`. Clone with submodules:
+GLFW, ImGui, OpenAL Soft and Catch2 are git submodules pinned to specific
+commits; `stb_image.h` is vendored directly in `external/stb/`. Clone with
+submodules:
 
 ```bash
 git clone --recurse-submodules https://github.com/nephxio/HorizonUnseen.git
@@ -36,6 +37,13 @@ in the vendored trees, or the changes will be lost on the next upgrade.
 
 Catch2 is only configured when the test suite is being built. Configure with
 `-DHU_BUILD_TESTS=OFF` to skip it entirely.
+
+OpenAL Soft is **LGPL v2** while this project is MIT, so it is built as a
+shared library and linked dynamically, never statically. `OpenAL32.dll` ships
+alongside the executable and the release package carries the attribution and
+source offer the licence requires. Static linking it would extend LGPL
+relinking obligations to the whole game, so `LIBTYPE` is pinned to `SHARED` in
+`external/CMakeLists.txt` rather than left to a default.
 
 ### Build
 
@@ -167,6 +175,7 @@ src/
 │   ├── Weapons/     Weapons and superweapons
 │   └── GameWorld    The scene: owns every system, implements IGameWorld
 ├── Rendering/     Batched instanced sprite renderer, atlas, textures
+├── Audio/         OpenAL voice pool and music, driven by plain SoundEvents
 ├── Sim/           Headless C ABI over GameWorld, for the RL harness
 ├── UI/            HUD, menus, debug overlay (renders from plain view models)
 └── Application    State machine wiring gameplay, UI and rendering together
@@ -174,9 +183,15 @@ src/
 tests/             Catch2 unit tests for gameplay rules
 ```
 
-The layering is deliberate: gameplay never includes a graphics header, the UI never
-touches a gameplay object (it renders from the view models in `UI/UiModel.h`), and
-`Application` is the only place that depends on all three.
+The layering is deliberate: gameplay never includes a graphics or audio header, the
+UI never touches a gameplay object (it renders from the view models in
+`UI/UiModel.h`), and `Application` is the only place that depends on them all.
+
+Audio follows the same shape as rendering. Gameplay emits `SoundEvent`s the way it
+emits a `DrawList` — plain data, queued without knowing whether anything is
+listening — and `Application` drains them into the audio engine. Only the game
+executable links `Audio/`, which is what keeps `husim` and the test binary free of
+any OpenAL dependency and therefore runnable on a machine with no sound device.
 
 ## Art
 
@@ -189,6 +204,30 @@ python tools/generate_art.py --out assets
 This writes `assets/atlas.png` and `assets/atlas.json`. The sprite names in that JSON are
 a hard contract with the `hu::SpriteId` enum in `src/Core/SpriteId.h`; the renderer logs a
 warning for any sprite it cannot resolve and falls back to a white quad.
+
+## Audio
+
+Placeholder audio is generated the same way — synthesised from oscillators and
+shaped noise, seeded so the output is reproducible:
+
+```bash
+python tools/generate_audio.py --out assets
+```
+
+This writes `assets/sounds/*.wav` and `assets/sounds.json`, a hard contract with
+`hu::SoundId` and `hu::MusicId` in `src/Core/SoundId.h`. Unlike the atlas, a
+mismatch here is checked in CI by `tools/check_audio.py`, because a missing sound
+is indistinguishable from a volume slider being down.
+
+Effects are mono and panned by where they happened on screen; OpenAL only
+spatialises mono sources, so a stereo effect would silently ignore its pan. Music
+is stereo, generated at a lower sample rate, and looped seamlessly.
+
+Only the standard library is needed — no Pillow, no numpy.
+
+Volume is controlled from the Options screen and persisted in the save file. If no
+audio device is available the game logs a warning and runs silently rather than
+failing to start.
 
 ## Tests
 
@@ -217,6 +256,10 @@ Two areas are covered so far, both chosen because a bug in them is silent:
   registries, a malformed secret does not error; it just becomes unearnable.
   `SecretRegistryTests.cpp` checks for exactly the shapes that
   `SecretTracker` skips silently.
+- **Audio** (`[audio]`) — the wav reader, including truncated and malformed
+  input, since chunk sizes come out of the file and are used to index into it;
+  the gameplay sound queue and its panning; and volume clamping and
+  persistence. Nothing here needs a sound device.
 
 The tracker tests build their own definitions and pass them to
 `SecretTracker::onLevelStart`, so they describe the rules rather than whatever

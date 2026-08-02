@@ -106,6 +106,12 @@ public:
     // Drains queued notifications (secrets found, pick-ups, cell events).
     std::vector<Notice> takeNotices();
 
+    // Drains one-shots queued this frame, the same way takeNotices() drains
+    // toasts. The application hands these to the audio engine; when nothing is
+    // listening they are simply discarded, which is what keeps the headless
+    // build silent without gameplay knowing anything about it.
+    std::vector<SoundEvent> takeSoundEvents();
+
     // Camera shake offset applied by the renderer/draw list this frame.
     Vector2 shakeOffset() const { return m_shakeOffset; }
 
@@ -126,6 +132,8 @@ public:
     void spawnEnemyProjectile(const ProjectileSpawn& spawn) override;
     void spawnPowerup(PowerupType type, Vector2 position) override;
     void spawnEffect(const EffectRequest& request) override;
+    void playSound(SoundId id, float gain = 1.0f) override;
+    void playSoundAt(SoundId id, Vector2 position, float gain = 1.0f) override;
 
     Vector2 playerPosition() const override;
     bool findNearestEnemy(Vector2 from, float maxDistance, TargetInfo& out) const override;
@@ -150,6 +158,10 @@ private:
     void collectPowerups();
     void damagePlayer(float amount, Vector2 source);
     void pushNotice(const std::string& title, const std::string& subtitle, NoticeKind kind);
+
+    // Ceiling on the undrained sound queue; see queueSound for why it exists.
+    static constexpr std::size_t MaxQueuedSoundEvents = 256;
+    void queueSound(const SoundEvent& event);
     void updateShake(float deltaTime);
     static TargetInfo describe(const EnemyBase& enemy);
 
@@ -198,6 +210,7 @@ private:
     float m_grazeEffectTimer = 0.0f;
 
     std::vector<Notice> m_notices;
+    std::vector<SoundEvent> m_soundEvents;
 };
 
 } // namespace hu

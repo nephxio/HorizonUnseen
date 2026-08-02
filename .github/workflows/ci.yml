@@ -158,10 +158,13 @@ jobs:
           $expected = @(
             "build/HorizonUnseen.exe",
             "build/husim.dll",
+            "build/OpenAL32.dll",
             "build/shaders/sprite.vert.spv",
             "build/shaders/sprite.frag.spv",
             "build/assets/atlas.png",
-            "build/assets/atlas.json"
+            "build/assets/atlas.json",
+            "build/assets/sounds.json",
+            "build/assets/sounds/music_level.wav"
           )
           $missing = $expected | Where-Object { -not (Test-Path $_) }
           if ($missing) {
@@ -176,6 +179,12 @@ jobs:
         # hard contract and drift silently. Cheap to check, annoying to debug.
         shell: pwsh
         run: python tools/check_atlas.py
+
+      - name: Verify the sound manifest matches the SoundId contract
+        # Same contract, same silent failure mode -- worse, in fact: a missing
+        # sound is indistinguishable from a volume slider being down.
+        shell: pwsh
+        run: python tools/check_audio.py
 
       - name: Install Python test dependencies
         run: python -m pip install --quiet numpy

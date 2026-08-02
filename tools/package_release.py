@@ -28,22 +28,35 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # build that starts and then fails at draw time.
 REQUIRED_ARTIFACTS = [
     ("HorizonUnseen.exe", "HorizonUnseen.exe"),
+    # OpenAL Soft. Shipped as a DLL rather than statically linked, which is what
+    # keeps its LGPL v2 licence cleanly separated from this MIT project.
+    ("OpenAL32.dll", "OpenAL32.dll"),
     ("shaders/sprite.vert.spv", "shaders/sprite.vert.spv"),
     ("shaders/sprite.frag.spv", "shaders/sprite.frag.spv"),
     ("assets/atlas.png", "assets/atlas.png"),
     ("assets/atlas.json", "assets/atlas.json"),
+    ("assets/sounds.json", "assets/sounds.json"),
+]
+
+# Directories copied wholesale, as (source relative to build dir, destination,
+# glob, minimum count). Listing nineteen wav files individually would be a
+# maintenance trap -- but a bare copy would silently ship an empty folder if the
+# generator had never been run, so a floor is enforced instead.
+REQUIRED_DIRECTORIES = [
+    ("assets/sounds", "assets/sounds", "*.wav", 19),
 ]
 
 # The RL library is a developer tool, not player-facing, so it is deliberately
 # excluded from the distribution.
-EXCLUDED_FROM_PACKAGE = ("husim.dll",)
+EXCLUDED_FROM_PACKAGE = ("husim.dll", "HorizonUnseenTests.exe")
 
 README_TEMPLATE = REPO_ROOT / "packaging" / "README.txt"
 
 # Non-system DLLs a correctly built release may depend on. vulkan-1.dll ships
-# with GPU drivers; anything else means the static CRT did not take and the
-# build will fail to start on a machine without Visual Studio.
-ALLOWED_RUNTIME_DLLS = {"vulkan-1.dll"}
+# with GPU drivers and OpenAL32.dll is shipped alongside the executable;
+# anything else means the static CRT did not take and the build will fail to
+# start on a machine without Visual Studio.
+ALLOWED_RUNTIME_DLLS = {"vulkan-1.dll", "openal32.dll"}
 
 
 def fail(message: str) -> None:
@@ -130,6 +143,26 @@ def main() -> int:
         fail("missing required build artefacts:\n  " + "\n  ".join(missing))
     print(f"  copied {len(REQUIRED_ARTIFACTS)} artefacts")
 
+    # --- Copy required directories ----------------------------------------
+    copied_dir_files = []
+    for src_rel, dst_rel, pattern, minimum in REQUIRED_DIRECTORIES:
+        src_dir = build_dir / src_rel
+        if not src_dir.is_dir():
+            fail(f"missing required directory: {src_rel}\n"
+                 f"Regenerate it with: python tools/generate_audio.py --out assets")
+
+        found = sorted(src_dir.glob(pattern))
+        if len(found) < minimum:
+            fail(f"{src_rel} has {len(found)} {pattern} file(s), expected at least {minimum}.\n"
+                 f"Regenerate them with: python tools/generate_audio.py --out assets")
+
+        for src in found:
+            dst = stage / dst_rel / src.name
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            copied_dir_files.append(f"{dst_rel}/{src.name}")
+        print(f"  copied {len(found)} file(s) from {src_rel}")
+
     check_no_msvc_runtime_dependency(stage / "HorizonUnseen.exe")
 
     # --- Player README ----------------------------------------------------
@@ -159,6 +192,7 @@ def main() -> int:
             fail("the produced zip is corrupt")
 
     expected = {f"{package_name}/{dst}" for _, dst in REQUIRED_ARTIFACTS}
+    expected.update(f"{package_name}/{rel}" for rel in copied_dir_files)
     expected.add(f"{package_name}/README.txt")
     absent = sorted(expected - names)
     if absent:

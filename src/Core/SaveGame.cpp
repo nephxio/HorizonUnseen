@@ -60,10 +60,27 @@ SaveGame& SaveGame::instance() {
     return s_instance;
 }
 
+namespace {
+
+float clampVolume(float volume) {
+    if (!(volume >= 0.0f)) {   // also catches NaN out of a corrupt file
+        return 0.0f;
+    }
+    return volume > 1.0f ? 1.0f : volume;
+}
+
+} // namespace
+
+void SaveGame::setMasterVolume(float volume) { m_masterVolume = clampVolume(volume); }
+void SaveGame::setSfxVolume(float volume) { m_sfxVolume = clampVolume(volume); }
+void SaveGame::setMusicVolume(float volume) { m_musicVolume = clampVolume(volume); }
+
 void SaveGame::resetProgress() {
     m_unlockedSecrets.clear();
     m_levels.clear();
     m_lastError.clear();
+    // Volumes are a setting, not progress: wiping your save should not also
+    // reset the mixer to defaults mid-session.
     recomputeBulletHell();
     HU_LOG_INFO(kLogCategory, "Progress reset to a fresh profile");
 }
@@ -276,8 +293,23 @@ bool SaveGame::load(const std::string& path) {
         }
     }
 
+    // v2 appended the audio volumes. A v1 file simply stops here, and the
+    // defaults already in place stand -- a missing settings block is not a
+    // corrupt file, so this must not bail.
+    float master = kDefaultMasterVolume;
+    float sfx = kDefaultSfxVolume;
+    float music = kDefaultMusicVolume;
+    if (version >= 2) {
+        if (!readPod(file, master) || !readPod(file, sfx) || !readPod(file, music)) {
+            return bail("truncated audio settings");
+        }
+    }
+
     m_unlockedSecrets.swap(secrets);
     m_levels.swap(levels);
+    setMasterVolume(master);
+    setSfxVolume(sfx);
+    setMusicVolume(music);
 
     // Never trust a stored unlock flag - there isn't one. Recompute from the
     // registries every time the profile is loaded.
@@ -329,6 +361,10 @@ bool SaveGame::save(const std::string& path) const {
         writePod(file, entry.second.bestTimeSeconds);
         writePod(file, entry.second.bestScore);
     }
+
+    writePod(file, m_masterVolume);
+    writePod(file, m_sfxVolume);
+    writePod(file, m_musicVolume);
 
     file.flush();
     const bool good = file.good();

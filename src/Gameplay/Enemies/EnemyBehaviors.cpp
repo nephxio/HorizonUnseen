@@ -400,7 +400,12 @@ void muzzle(IGameWorld& world, Vector2 origin, Vector2 direction, float scale) {
     fx.position = origin;
     fx.direction = normalize(direction);
     fx.scale = scale;
+    // The flash is shared with the player's weapons, but the sound must not be:
+    // the player needs to hear incoming fire as distinct from their own, which
+    // matters most in bullet hell where the screen is full of both.
+    fx.silent = true;
     world.spawnEffect(fx);
+    world.playSoundAt(SoundId::EnemyFire, origin, 0.45f);
 }
 
 } // namespace enemyfire
